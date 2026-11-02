@@ -1,0 +1,99 @@
+# Training – Fitness-App 2026
+
+Trainingsbegleiter fürs Fitnessstudio als PWA: führt Block für Block durch den 75-Minuten-Plan, erfasst Wiederholungen, Gewicht und Dauer, plant Pausen und speichert alles lokal im Browser (IndexedDB). Nach dem ersten Laden vollständig offline nutzbar. Der Auftrag steht in `PROMPT.md`.
+
+## Aufbau
+
+```
+app/            die App (statische Dateien, kein Build-Schritt)
+  index.html, style.css, manifest.webmanifest, sw.js
+  js/logic.js   reine Logik: Schritte, Timer, Steigerung, Export/Import, CSV
+  js/seed.js    Ausgangsplan
+  js/db.js      IndexedDB-Speicher (+ Memory-Adapter für Tests)
+  js/app.js     Oberfläche
+  img/          Standardbilder (WebP, max. 1200 px), aus fotos/ erzeugt
+fotos/          Originalfotos (unverändert)
+tools/          make-images.py (Fotos → WebP), make-icons.py
+tests/          logic.test.js (Node), e2e.mjs (Playwright, 390 × 844)
+deploy/         Beispiel-Workflow für GitHub Pages (inaktiv)
+```
+
+**Stack:** Reines JavaScript (ES-Module) ohne Framework und ohne Build. Das ist für eine Ein-Personen-App mit wenigen Screens am wartbarsten: kein Node-Toolchain-Zwang, der Ordner `app/` ist direkt hostbar, und Safari-Verhalten (Service Worker, Wake Lock) lässt sich ohne Übersetzungsschicht nachvollziehen.
+
+## Lokal starten
+
+```
+cd Fitness-App-2026
+python3 -m http.server 8080 --directory app
+```
+
+Dann `http://localhost:8080` öffnen. (Service Worker und Wake Lock funktionieren nur über `localhost` oder HTTPS.)
+
+## Tests
+
+```
+node --test tests/logic.test.js                      # Datenlogik, 20 Tests
+npm start &                                          # Webserver auf Port 8080
+NODE_PATH=$(npm root -g) node tests/e2e.mjs          # Oberfläche im Handy-Viewport, offline, Export/Import, Timer
+```
+
+Standardbilder neu erzeugen (nach neuen Fotos in `fotos/`, Dateiname beginnt mit der Übungsnummer): `python3 tools/make-images.py`. Danach `app/sw.js` anpassen (Dateiliste und `CACHE`-Version erhöhen).
+
+## Auf dem iPhone testen
+
+1. Die App über HTTPS aufrufen (siehe unten) in **Safari**.
+2. Teilen-Symbol → **Zum Home-Bildschirm**. Die App nur von dort aus starten (nur so greift der Standalone-Modus).
+3. Einmal mit Internet öffnen und kurz warten, bis alles geladen ist. Danach Flugmodus testen.
+4. Training starten, Display sperren/entsperren: Uhr und Timer müssen weiterlaufen.
+
+## Daten sichern
+
+Alle Daten liegen nur in diesem Browser. **Safari kann sie auf dem iPhone löschen** (Speicherknappheit, lange nicht genutzt, „Websitedaten löschen“). Daher: Tab **Sicherung** → **Alles exportieren (JSON)** und die Datei in iCloud/Dateien ablegen. Das passiert am besten nach jedem Training oder mindestens wöchentlich. Import ersetzt alle Daten durch den Inhalt der Datei. Der Verlauf lässt sich zusätzlich als CSV exportieren (Semikolon, Dezimalkomma, für Excel).
+
+## Bedienung in Kürze
+
+- **Start:** „Training starten“. Die Cardio-Blöcke starten ihren Countdown automatisch.
+- **Satz:** Wiederholungen und Gewicht sind vorbelegt (letzter Wert, sonst Soll). „Erledigt“ speichert und startet die Pause.
+- **Supersatz/Zirkel:** Übungen wechseln sich ab, Pause erst nach der Runde. Übungen „je Seite/Arm“ erfassen links und rechts getrennt.
+- **Übung 14** hat kein Soll-Gewicht: Der erste eingegebene Wert wird zum neuen Soll.
+- **Verlauf:** Trainings und Sätze bearbeiten oder löschen; Tab „Übungen“ zeigt den Gewichtsverlauf und den Steigerungshinweis.
+- **Plan:** Übungen/Blöcke ändern, per ☰ ziehen oder mit Pfeilen sortieren, Fotos ersetzen, Zeiten anpassen, Ausgangsplan wiederherstellen.
+
+## Annahmen im Plan (bitte prüfen)
+
+- **Scott-Curl „2 × 5 kg“:** als 5 kg je Seite (Scheiben) angelegt. Falls 5 kg insgesamt gemeint sind, im Plan-Editor Einheit auf „kg“ stellen.
+- **Steigerungsstufe:** 2,5 kg bei „kg je Seite“ (Scheiben), 5 kg bei „kg“ und „kg je Arm“ (Steckgewicht). Pro Übung einstellbar.
+- **Volumen:** Gewicht × Wiederholungen aller Arbeitssätze, Gewicht wie eingegeben (bei „je Seite“ also nicht verdoppelt). Aufwärmsätze zählen nicht.
+- **Pausen:** 90 s nach Arbeitssätzen bei Übung 1–4, sonst 60 s; 30 s nach Aufwärmsätzen; Zirkel D 60 s nach jeder Runde. Nach dem letzten Satz eines Blocks gibt es keine Pause (der Zeitplan enthält die Wechselzeit).
+- **Übung 14** ist laut `PROMPT.md` Teil von Zirkel D. `fotos/ZUORDNUNG.md` nennt sie noch „zusätzliches Gerät“; der Prompt hat Vorrang.
+- Gerätenamen und Technikhinweise: Technik aus `PROMPT.md`, Gerätenamen aus den Fotos abgeleitet. Alles im Plan-Editor änderbar.
+- Die Zuordnung der Fotos 04 (Schulterdrücken) und 06 (Reverse Butterfly) war in `ZUORDNUNG.md` als „unsicher“ markiert. Im Plan-Editor lässt sich ein Foto je Übung ersetzen.
+
+## App per HTTPS aufs Handy bringen (nicht ausgeführt, nur vorbereitet)
+
+Ohne deine Freigabe wurde nichts veröffentlicht.
+
+### Weg A: Netlify Drop (empfohlen, am schnellsten)
+
+Vorteile: keine Änderung am Repo, Repo kann privat bleiben, HTTPS sofort, kostenlos. Nachteil: Updates sind Handarbeit (Ordner erneut hochladen); die Adresse ist öffentlich erreichbar (zufälliger Name), enthält aber nur Gerätefotos und keine persönlichen Daten.
+
+1. Auf https://app.netlify.com/drop gehen (Konto anlegen oder anmelden).
+2. Den Ordner `app/` aus dem Repo (nicht das ganze Repo) in das Feld ziehen.
+3. Die angezeigte Adresse `https://….netlify.app` auf dem iPhone in Safari öffnen und zum Home-Bildschirm hinzufügen.
+4. Update: in Netlify unter „Deploys“ den geänderten Ordner erneut hochladen. Vorher `CACHE` in `app/sw.js` erhöhen, sonst liefert der Service Worker die alte Version.
+
+### Weg B: GitHub Pages
+
+Vorteile: Updates laufen automatisch bei jedem Push auf `main`. Nachteile: Pages auf **privaten** Repos erfordert einen kostenpflichtigen GitHub-Tarif; im kostenlosen Tarif muss das Repo **öffentlich** sein (inklusive `fotos/` und `PROMPT.md`). Das Umstellen der Sichtbarkeit nur nach eigener Entscheidung.
+
+1. Repo-Sichtbarkeit klären (öffentlich oder bezahlter Tarif).
+2. `deploy/github-pages.yml.example` nach `.github/workflows/pages.yml` kopieren und committen.
+3. Im Repo: **Settings → Pages → Source: GitHub Actions**.
+4. Nach dem Push auf `main` läuft die Action. Die Adresse lautet `https://<benutzer>.github.io/<repo>/`. Die App nutzt relative Pfade und läuft deshalb auch in diesem Unterpfad.
+
+## Nicht getestet / offen
+
+- **Safari auf einem echten iPhone:** nicht getestet (nur Chromium mit 390 × 844 Viewport, simulierte Uhr). Besonders prüfen: Zum-Home-Bildschirm-Installation, Offline-Start aus dem Home-Bildschirm, Speicherverhalten (siehe Sicherung), Foto aufnehmen/auswählen, Drag & Drop per Touch (die Pfeiltasten sind der verlässliche Weg), Dateidownload der Sicherung.
+- **Ton und Vibration:** Ton ist nur nach einer Berührung der Seite erlaubt und kommt nicht, solange das Display aus ist; der Timer ist dann trotzdem korrekt und meldet sich beim Entsperren. iOS-Safari unterstützt `navigator.vibrate` nicht.
+- **Display wach halten:** Screen Wake Lock wird verwendet, sofern unterstützt (iOS ab 16.4; in der Home-Bildschirm-App gab es bis iOS 18.3 einen Fehler). Wenn nicht verfügbar, zeigt die App einen Hinweis. Im Test-Chromium schlug die Anforderung ebenfalls fehl; die Wake-Lock-Funktion selbst wurde daher nicht erfolgreich geprüft.
+- Die Sicherung per „Teilen“-Dialog und der Export-Download wurden nur in Chromium geprüft.
