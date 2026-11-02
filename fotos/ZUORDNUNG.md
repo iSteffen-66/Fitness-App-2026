@@ -14,7 +14,8 @@
 | 10-kabel-butterfly.jpeg | Kabel-Butterfly frei | IMG_7259 | wahrscheinlich |
 | 11-waden.jpeg | Waden sitzend | IMG_7262 | sicher |
 | 13-bauchmaschine.jpeg | Bauchmaschine | IMG_7264 | sicher |
+| 14-bauch-schraeg.jpeg | Bauchmaschine schräg (Winkel links/rechts verstellbar, seitliche Bauchmuskeln) | IMG_7263 | sicher |
 
 Übung 12 (Bauch ohne Gewicht) hat kein Foto.
 
-`unklar/IMG_7263-rote-maschine-mit-beinrollen.jpeg`: rote Hammer-Strength-Maschine mit Rückenpolster und Beinrollen, keiner Übung im Plan eindeutig zuzuordnen.
+Foto 14 gehört zu keiner Übung im aktuellen Plan und ist als zusätzliches Gerät vorgesehen, z. B. als Ergänzung zu Zirkel D.
