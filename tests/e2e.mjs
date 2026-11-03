@@ -161,6 +161,35 @@ if (OWN_PHOTO) ok(await page.evaluate(() => !!__app.S.photos[1]), 'Import: eigen
 await page.setInputFiles('[data-import]', { name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"app":"anders"}') }); await page.waitForTimeout(300);
 ok(/nicht aus dieser App/.test(await page.locator('#toast').innerText()), 'Import: falsche Datei wird abgelehnt');
 
+console.log('6b. Plan auf ein zweites Gerät übertragen (Verlauf bleibt)');
+await go('plan/ex/4'); await page.waitForSelector('#x-name');
+await page.fill('#x-name', 'Schulterdrücken Gerät A'); await page.locator('[data-act="saveEx"]').click(); await page.waitForTimeout(150);
+await go('backup'); await page.waitForSelector('#plan-transfer'); await hscroll('Sicherung mit Plan-Übertragung'); await page.locator('#plan-transfer').scrollIntoViewIfNeeded(); await shot('18-plan-uebertragen');
+const [dl3] = await Promise.all([page.waitForEvent('download'), tapAct('exportPlan')]);
+const planFile = path.join(SHOTS, 'plan.json'); await dl3.saveAs(planFile);
+const pf = JSON.parse(fs.readFileSync(planFile, 'utf8'));
+ok(pf.kind === 'plan' && !pf.sessions && pf.plan.exercises[4].name === 'Schulterdrücken Gerät A', 'Plan-Export enthält nur den Plan (ohne Verlauf)');
+if (OWN_PHOTO) ok(!!pf.photos[1], 'Plan-Export enthält eigenes Foto');
+// Gerät B: eigenes Browserprofil mit eigenem Verlauf
+const ctxB = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+const pb = await ctxB.newPage();
+await pb.goto(URL_); await pb.waitForSelector('[data-act="start"]');
+await pb.evaluate(async () => { const s = { id: 'geraet-b', startedAt: Date.now(), endedAt: Date.now(), durationSec: 60, status: 'done', entries: [{ kind: 'sets', exId: 2, name: 'Enges Rudern', blockName: 'A', unit: 'kg', sets: [{ type: 'work', reps: 10, targetReps: 10, weight: 15, targetWeight: 15 }] }] };
+  const r = indexedDB.open('fitness-app-2026'); await new Promise((res) => { r.onsuccess = () => { const tx = r.result.transaction('sessions', 'readwrite'); tx.objectStore('sessions').put(s); tx.oncomplete = res; }; }); });
+await pb.reload(); await pb.evaluate((x) => { location.hash = x; }, 'backup'); await pb.waitForSelector('[data-planimport]', { state: 'attached' });
+await pb.setInputFiles('[data-planimport]', planFile); await pb.waitForSelector('#modal [data-m="ok"]');
+ok(/Verlauf bleibt erhalten/.test(await pb.locator('#modal').innerText()), 'Rückfrage nennt, dass der Verlauf erhalten bleibt');
+await pb.locator('#modal [data-m="ok"]').click(); await pb.waitForTimeout(400);
+eq(await pb.evaluate(() => __app.S.plan.exercises[4].name), 'Schulterdrücken Gerät A', 'Gerät B: Plan übernommen');
+eq(await pb.evaluate(() => __app.S.sessions.map((s) => s.id).join()), 'geraet-b', 'Gerät B: eigener Verlauf unverändert');
+if (OWN_PHOTO) ok(await pb.evaluate(() => !!__app.S.photos[1]), 'Gerät B: eigenes Foto übernommen');
+await pb.reload(); await pb.waitForSelector('#app h1');
+eq(await pb.evaluate(() => __app.S.plan.exercises[4].name), 'Schulterdrücken Gerät A', 'Gerät B: Plan nach Neuladen gespeichert');
+// Plan-Datei im Sicherungs-Import wird abgewiesen
+await pb.setInputFiles('[data-import]', planFile); await pb.waitForTimeout(300);
+ok(/Plan importieren/.test(await pb.locator('#toast').innerText()), 'Plan-Datei im vollständigen Import wird abgewiesen');
+await ctxB.close();
+
 console.log('7. Neu laden und Offline');
 await page.reload(); await page.waitForSelector('text=Sicherung');
 await ctx.setOffline(true);

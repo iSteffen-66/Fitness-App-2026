@@ -373,17 +373,51 @@ export function toCSV(sessions, tz = {}) {
 export function buildExport(plan, sessions, photos, now = Date.now()) {
   return { app: APP_ID, version: 1, exportedAt: now, plan, sessions, photos };
 }
+function validatePlan(plan) {
+  if (!plan || !Array.isArray(plan.blocks) || !plan.exercises || typeof plan.exercises !== 'object') return { ok: false, error: 'Plan fehlt oder ist beschädigt.' };
+  for (const b of plan.blocks) {
+    if (!b || typeof b.id !== 'string' || !b.name) return { ok: false, error: 'Ein Block im Plan ist beschädigt.' };
+    for (const id of b.items || []) if (!plan.exercises[id]) return { ok: false, error: `Block „${b.name}“ verweist auf eine fehlende Übung (${id}).` };
+  }
+  return { ok: true };
+}
+function validatePhotos(ph) {
+  for (const k of Object.keys(ph || {})) if (typeof ph[k] !== 'string' || !ph[k].startsWith('data:image/')) return { ok: false, error: `Eigenes Foto ${k} ist beschädigt.` };
+  return { ok: true };
+}
 export function validateImport(o) {
   if (!o || typeof o !== 'object') return { ok: false, error: 'Keine gültige JSON-Datei.' };
   if (o.app !== APP_ID) return { ok: false, error: 'Die Datei stammt nicht aus dieser App.' };
-  if (!o.plan || !Array.isArray(o.plan.blocks) || !o.plan.exercises || typeof o.plan.exercises !== 'object') return { ok: false, error: 'Plan fehlt oder ist beschädigt.' };
-  for (const b of o.plan.blocks) {
-    if (!b || typeof b.id !== 'string' || !b.name) return { ok: false, error: 'Ein Block im Plan ist beschädigt.' };
-    for (const id of b.items || []) if (!o.plan.exercises[id]) return { ok: false, error: `Block „${b.name}“ verweist auf eine fehlende Übung (${id}).` };
-  }
+  if (o.kind === 'plan') return { ok: false, error: 'Das ist eine Plan-Datei. Bitte über „Plan importieren“ einlesen.' };
+  const vp = validatePlan(o.plan); if (!vp.ok) return vp;
   if (!Array.isArray(o.sessions)) return { ok: false, error: 'Verlauf fehlt.' };
   for (const s of o.sessions) if (!s || !s.id || !Array.isArray(s.entries) || typeof s.startedAt !== 'number') return { ok: false, error: 'Ein Training im Verlauf ist beschädigt.' };
-  const ph = o.photos || {};
-  for (const k of Object.keys(ph)) if (typeof ph[k] !== 'string' || !ph[k].startsWith('data:image/')) return { ok: false, error: `Eigenes Foto ${k} ist beschädigt.` };
-  return { ok: true };
+  return validatePhotos(o.photos);
+}
+
+// ---------- Nur den Plan übertragen (Verlauf bleibt auf jedem Gerät) ----------
+/** Plan-Datei: Plan plus eigene Fotos der Übungen im Plan. */
+export function buildPlanExport(plan, photos, now = Date.now()) {
+  const ids = new Set(Object.keys(plan.exercises).map(String));
+  const own = Object.fromEntries(Object.entries(photos || {}).filter(([k]) => ids.has(String(k))));
+  return { app: APP_ID, kind: 'plan', version: 1, exportedAt: now, plan, photos: own };
+}
+/** Akzeptiert Plan-Dateien und vollständige Sicherungen; liefert nur Plan und Fotos. */
+export function readPlanImport(o) {
+  if (!o || typeof o !== 'object') return { ok: false, error: 'Keine gültige JSON-Datei.' };
+  if (o.app !== APP_ID) return { ok: false, error: 'Die Datei stammt nicht aus dieser App.' };
+  const vp = validatePlan(o.plan); if (!vp.ok) return vp;
+  const vf = validatePhotos(o.photos); if (!vf.ok) return vf;
+  return { ok: true, plan: o.plan, photos: o.photos || {}, exportedAt: o.exportedAt || null, fromBackup: o.kind !== 'plan' };
+}
+/**
+ * Fotos nach dem Plan-Import: Für Übungen des neuen Plans gilt genau der Stand der Datei
+ * (eigenes Foto oder Standardbild). Fotos anderer Übungen bleiben unberührt.
+ */
+export function mergePlanPhotos(current, plan, incoming) {
+  const out = { ...current };
+  for (const id of Object.keys(plan.exercises)) {
+    if (incoming[id]) out[id] = incoming[id]; else delete out[id];
+  }
+  return out;
 }

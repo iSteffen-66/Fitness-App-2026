@@ -307,3 +307,47 @@ test('Service Worker kennt alle App-Dateien', () => {
   const missing = files.filter((f) => !sw.includes(`'${f}'`));
   assert.deepEqual(missing, []);
 });
+
+test('Plan übertragen: Export enthält nur Plan und Fotos der Planübungen', () => {
+  const p = defaultPlan();
+  const f = JSON.parse(JSON.stringify(L.buildPlanExport(p, { 3: 'data:image/jpeg;base64,AA', 99: 'data:image/jpeg;base64,BB' }, T0)));
+  assert.equal(f.kind, 'plan');
+  assert.equal(f.sessions, undefined);
+  assert.deepEqual(Object.keys(f.photos), ['3']);
+  const r = L.readPlanImport(f);
+  assert.equal(r.ok, true);
+  assert.equal(r.fromBackup, false);
+  assert.equal(r.exportedAt, T0);
+  // Plan-Datei wird beim vollständigen Import abgewiesen (würde sonst Verlauf löschen)
+  assert.match(L.validateImport(f).error, /Plan importieren/);
+  // Vollständige Sicherung ist als Plan-Quelle erlaubt
+  assert.equal(L.readPlanImport(L.buildExport(p, [], {})).fromBackup, true);
+  assert.equal(L.readPlanImport({ app: 'x' }).ok, false);
+  const broken = structuredClone(f); broken.plan.blocks[2].items = [77];
+  assert.equal(L.readPlanImport(broken).ok, false);
+});
+
+test('Plan übertragen: Fotos werden je Übung angeglichen', () => {
+  const p = defaultPlan();
+  const cur = { 1: 'data:image/jpeg;base64,ALT1', 2: 'data:image/jpeg;base64,ALT2', 99: 'data:image/jpeg;base64,X' };
+  const out = L.mergePlanPhotos(cur, p, { 1: 'data:image/jpeg;base64,NEU1' });
+  assert.equal(out[1], 'data:image/jpeg;base64,NEU1');   // ersetzt
+  assert.equal(out[2], undefined);                        // auf Gerät A Standardbild → hier auch
+  assert.equal(out[99], 'data:image/jpeg;base64,X');      // Übung nicht im Plan → bleibt
+});
+
+test('Plan übertragen: Verlauf bleibt beim Plan-Import erhalten', async () => {
+  const store = createStore(memoryAdapter());
+  const plan = await store.getPlan();
+  const ss = await twoSessions(plan, 10);
+  for (const s of ss) await store.saveSession(s);
+  await store.savePhoto(5, 'data:image/jpeg;base64,ALT');
+  await store.saveMeta({ lastExport: 123 });
+  const other = defaultPlan(); other.exercises[1].name = 'Von Gerät A';
+  const r = L.readPlanImport(JSON.parse(JSON.stringify(L.buildPlanExport(other, { 2: 'data:image/jpeg;base64,NEU' }))));
+  await store.replacePlan(r.plan, L.mergePlanPhotos(await store.getPhotos(), r.plan, r.photos));
+  assert.equal((await store.getPlan()).exercises[1].name, 'Von Gerät A');
+  assert.equal((await store.listSessions()).length, 2);
+  assert.deepEqual(await store.getPhotos(), { 2: 'data:image/jpeg;base64,NEU' });
+  assert.deepEqual(await store.getMeta(), { lastExport: 123 });
+});

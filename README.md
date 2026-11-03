@@ -32,12 +32,21 @@ Dann `http://localhost:8080` öffnen. (Service Worker und Wake Lock funktioniere
 ## Tests
 
 ```
-node --test tests/logic.test.js                      # Datenlogik, 20 Tests
+node --test tests/logic.test.js                      # Datenlogik, 23 Tests
 npm start &                                          # Webserver auf Port 8080
 NODE_PATH=$(npm root -g) node tests/e2e.mjs          # Oberfläche im Handy-Viewport, offline, Export/Import, Timer
 ```
 
 Standardbilder neu erzeugen (nach neuen Fotos in `fotos/`, Dateiname beginnt mit der Übungsnummer): `python3 tools/make-images.py`. Danach `app/sw.js` anpassen (Dateiliste und `CACHE`-Version erhöhen).
+
+## Live-Adresse und Updates
+
+Die App läuft auf Firebase Hosting: **https://fitness-app-2026-fc0ae.web.app** (Projekt `fitness-app-2026-fc0ae`).
+
+Update veröffentlichen:
+1. In `app/sw.js` die Konstante `CACHE` hochzählen (z. B. `training-v3`), sonst laden installierte Apps die alte Version.
+2. `npm install -g firebase-tools` (einmalig), `firebase login`, dann im Repo-Ordner `firebase deploy --only hosting`.
+3. Auf dem iPhone die App schließen und neu öffnen, ggf. ein zweites Mal: Der Service Worker lädt die neue Version im Hintergrund und zeigt sie beim nächsten Start.
 
 ## Auf dem iPhone testen
 
@@ -49,6 +58,19 @@ Standardbilder neu erzeugen (nach neuen Fotos in `fotos/`, Dateiname beginnt mit
 ## Daten sichern
 
 Alle Daten liegen nur in diesem Browser. **Safari kann sie auf dem iPhone löschen** (Speicherknappheit, lange nicht genutzt, „Websitedaten löschen“). Daher: Tab **Sicherung** → **Alles exportieren (JSON)** und die Datei in iCloud/Dateien ablegen. Das passiert am besten nach jedem Training oder mindestens wöchentlich. Import ersetzt alle Daten durch den Inhalt der Datei. Der Verlauf lässt sich zusätzlich als CSV exportieren (Semikolon, Dezimalkomma, für Excel).
+
+## Plan auf mehreren Geräten nutzen
+
+Jedes Gerät speichert seine Daten getrennt. Einen geänderten Plan überträgst du so:
+
+1. Auf dem Gerät mit dem geänderten Plan: **Sicherung → Plan auf andere Geräte übertragen → „Plan teilen“** (z. B. per AirDrop oder in „Dateien“ sichern) oder **„Plan exportieren“**. Vom Plan-Tab führt der Knopf „Plan auf andere Geräte übertragen“ direkt dorthin.
+2. Auf dem anderen Gerät: **Sicherung → „Plan importieren“** und die Datei `training-plan-JJJJ-MM-TT.json` wählen.
+
+Dabei gilt:
+- Übernommen werden Plan und eigene Fotos der Übungen im Plan. Für diese Übungen gilt danach genau der Stand der Datei (eigenes Foto oder Standardbild).
+- Verlauf und Sicherungsdatum auf dem Zielgerät bleiben unverändert.
+- Ein laufendes Training nutzt den neuen Plan erst beim nächsten Start.
+- „Plan importieren“ akzeptiert auch eine vollständige Sicherung und übernimmt daraus nur den Plan. Umgekehrt weist „Sicherung importieren“ eine Plan-Datei ab, weil sie sonst den Verlauf löschen würde.
 
 ## Bedienung in Kürze
 

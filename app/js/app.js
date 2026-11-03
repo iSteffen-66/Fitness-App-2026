@@ -147,9 +147,9 @@ function backupAgeText() {
   const d = Math.floor((Date.now() - t) / 86400000);
   return d === 0 ? 'Zuletzt heute exportiert.' : `Zuletzt vor ${d} Tag${d === 1 ? '' : 'en'} exportiert.`;
 }
-const backupWarn = () => `<div class="card warn"><b>Daten sichern!</b>
+const backupWarn = (link = true) => `<div class="card warn"><b>Daten sichern!</b>
   <p class="sm">Plan, Verlauf und Fotos liegen nur in diesem Browser. Auf dem iPhone kann Safari diese Daten löschen (z. B. bei Speicherplatzmangel oder wenn die App lange nicht geöffnet wurde). Exportiere regelmäßig eine Sicherung.</p>
-  <p class="sm muted">${backupAgeText()}</p><a class="btn ghost" href="#/backup">Zur Sicherung</a></div>`;
+  <p class="sm muted">${backupAgeText()}</p>${link ? '<a class="btn ghost" href="#/backup">Zur Sicherung</a>' : ''}</div>`;
 
 function viewHome() {
   const a = S.active;
@@ -439,6 +439,7 @@ function viewPlan() {
     h += '</div>';
   }
   h += `</div><div class="grid2"><button class="btn" data-act="addBlock">+ Block</button><button class="btn ghost" data-act="align">Zeiten lückenlos</button></div>
+    <a class="btn ghost" style="margin-top:10px" href="#/backup" data-act="toPlanTransfer">Plan auf andere Geräte übertragen</a>
     <button class="btn ghost" style="margin-top:10px" data-act="resetPlan">Plan auf Ausgangsversion zurücksetzen</button>`;
   return h;
 }
@@ -518,13 +519,25 @@ function viewPlanBlock(id) {
 // ---------- Sicherung ----------
 function viewBackup() {
   const nPh = Object.keys(S.photos).length;
-  return `<h1>Sicherung</h1>${backupWarn()}
+  return `<h1>Sicherung</h1>${backupWarn(false)}
     <p class="muted">Enthalten: Plan, ${S.sessions.length} Training${S.sessions.length === 1 ? '' : 's'}, ${nPh} eigene${nPh === 1 ? 's' : ''} Foto${nPh === 1 ? '' : 's'}.</p>
     <button class="btn" data-act="exportJson">Alles exportieren (JSON)</button>
     ${typeof navigator.canShare === 'function' ? '<button class="btn ghost" style="margin-top:10px" data-act="shareJson">Sicherung teilen / in Dateien sichern</button>' : ''}
     <button class="btn ghost" style="margin-top:10px" data-act="exportCsv">Verlauf als CSV exportieren</button>
     <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" accept="application/json,.json" data-import hidden>Sicherung importieren (JSON)</label>
+    <p class="sm muted">Der Import einer Sicherung ersetzt <b>alles</b> auf diesem Gerät, auch den Verlauf.</p>
+    ${planTransferHTML()}
     <h2>Gefahrenbereich</h2><button class="btn danger" data-act="wipe">Alle Daten löschen</button>`;
+}
+function planTransferHTML() {
+  const share = typeof navigator.canShare === 'function';
+  return `<h2 id="plan-transfer">Plan auf andere Geräte übertragen</h2>
+    <p class="sm muted">Überträgt nur den Plan (mit eigenen Fotos der Übungen). Der Verlauf bleibt auf jedem Gerät erhalten.</p>
+    <ol class="sm muted" style="padding-left:20px;margin:6px 0 10px"><li>Hier auf dem Gerät mit dem geänderten Plan: ${share ? '„Plan teilen“ (z. B. per AirDrop) oder ' : ''}„Plan exportieren“.</li><li>Auf dem anderen Gerät: „Plan importieren“ und die Datei wählen.</li></ol>
+    ${share ? '<button class="btn" data-act="sharePlan">Plan teilen (AirDrop, Dateien …)</button>' : ''}
+    <button class="btn ${share ? 'ghost' : ''}" style="margin-top:10px" data-act="exportPlan">Plan exportieren</button>
+    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" accept="application/json,.json" data-planimport hidden>Plan importieren</label>
+    ${S.meta.planImportedAt ? `<p class="sm muted">Zuletzt importiert: ${dateFmt(S.meta.planImportedAt)} ${timeFmt(S.meta.planImportedAt)}${S.meta.planSourceAt ? ` (Stand vom ${dateFmt(S.meta.planSourceAt)} ${timeFmt(S.meta.planSourceAt)})` : ''}</p>` : ''}`;
 }
 function download(name, text, mime) {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -534,6 +547,26 @@ function download(name, text, mime) {
 const stamp = () => new Date().toISOString().slice(0, 10);
 const exportJSON = () => JSON.stringify(L.buildExport(S.plan, S.sessions, S.photos));
 async function markExport() { S.meta.lastExport = Date.now(); await store.saveMeta(S.meta); }
+
+const planJSON = () => JSON.stringify(L.buildPlanExport(S.plan, S.photos));
+const planFileName = () => `training-plan-${stamp()}.json`;
+
+async function doPlanImport(file) {
+  let obj;
+  try { obj = JSON.parse(await file.text()); } catch { toast('Die Datei ist kein gültiges JSON.'); return; }
+  const r = L.readPlanImport(obj);
+  if (!r.ok) { toast(r.error); return; }
+  const nEx = Object.keys(r.plan.exercises).length, nPh = Object.keys(r.photos).length;
+  const when = r.exportedAt ? ` vom ${dateFmt(r.exportedAt)} ${timeFmt(r.exportedAt)}` : '';
+  const ok = await confirmBox(`Plan${when} übernehmen? (${r.plan.blocks.length} Blöcke, ${nEx} Übungen, ${nPh} eigene Fotos)${r.fromBackup ? ' Aus der Sicherung wird nur der Plan übernommen.' : ''} Der aktuelle Plan auf diesem Gerät wird ersetzt, der Verlauf bleibt erhalten.`, 'Plan übernehmen', 'ok');
+  if (!ok) return;
+  const photos = L.mergePlanPhotos(S.photos, r.plan, r.photos);
+  await store.replacePlan(r.plan, photos);
+  S.plan = await store.getPlan(); S.photos = await store.getPhotos();
+  S.meta.planImportedAt = Date.now(); S.meta.planSourceAt = r.exportedAt; await store.saveMeta(S.meta);
+  S.ui.xd = null; S.ui.bd = null;
+  toast(S.active ? 'Plan übernommen. Gilt ab dem nächsten Training.' : 'Plan übernommen.'); rerender();
+}
 
 async function doImport(file) {
   let obj;
@@ -682,6 +715,7 @@ const ACT = {
     const id = L.addExercise(S.plan, el.dataset.b, { name: 'Neue Übung', device: '', tech: '', photo: null, warmup: null, sets: [{ reps: 10, weight: null }], unit: 'kg', sides: 'none', rest: 60, warmRest: 30, step: null, optional: false });
     await savePlan(); S.ui.xd = null; nav('plan/ex/' + id);
   },
+  toPlanTransfer() { setTimeout(() => document.getElementById('plan-transfer')?.scrollIntoView(), 80); },
   cancelEx() { S.ui.xd = null; S.ui.bd = null; },
   xaddSet() { const d = S.ui.xd, l = d.sets[d.sets.length - 1]; d.sets.push({ ...l }); rerender(); },
   xdelSet(d, el) { S.ui.xd.sets.splice(+el.dataset.i, 1); rerender(); },
@@ -740,6 +774,14 @@ const ACT = {
       else toast('Teilen wird hier nicht unterstützt. Nutze „Alles exportieren“.');
     } catch (e) { if (e.name !== 'AbortError') toast('Teilen fehlgeschlagen.'); }
   },
+  exportPlan() { download(planFileName(), planJSON(), 'application/json'); },
+  async sharePlan() {
+    const file = new File([planJSON()], planFileName(), { type: 'application/json' });
+    try {
+      if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'Trainingsplan' });
+      else toast('Teilen wird hier nicht unterstützt. Nutze „Plan exportieren“.');
+    } catch (e) { if (e.name !== 'AbortError') toast('Teilen fehlgeschlagen.'); }
+  },
   exportCsv() { download(`training-verlauf-${stamp()}.csv`, L.toCSV(S.sessions), 'text/csv;charset=utf-8'); },
   async wipe() {
     if (!(await confirmBox('ALLE Daten löschen (Plan, Verlauf, Fotos)? Das lässt sich nur mit einer Sicherung rückgängig machen.', 'Alles löschen'))) return;
@@ -775,6 +817,7 @@ function bind() {
       } catch (err) { toast('Foto konnte nicht gelesen werden.'); }
     }
     if ('import' in t.dataset && t.files[0]) { await doImport(t.files[0]); t.value = ''; }
+    if ('planimport' in t.dataset && t.files[0]) { await doPlanImport(t.files[0]); t.value = ''; }
   });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && S.route[0] === 'training') { wakeLock = null; lockScreen(); tick(); }
