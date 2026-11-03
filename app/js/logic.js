@@ -121,9 +121,10 @@ export function buildSteps(plan, opts = {}) {
       }
     } else {
       const warm = exs.filter((e) => e.warmup);
+      const each = mode === 'alternate'; // Abwechselnd: Pause nach jedem Satz
       warm.forEach((ex, i) => steps.push(...makeSetSteps(block, ex, 'warmup', ex.warmup,
         { setNo: 0, setCount: 0, groupPos: i, groupSize: warm.length },
-        i === warm.length - 1 ? Math.max(...warm.map((e) => e.warmRest ?? 30)) : 0)));
+        each ? (ex.warmRest ?? 30) : i === warm.length - 1 ? Math.max(...warm.map((e) => e.warmRest ?? 30)) : 0)));
       const rounds = mode === 'circuit' ? Math.max(1, Number(block.rounds) || 1) : Math.max(...exs.map((e) => e.sets.length));
       for (let r = 0; r < rounds; r++) {
         const part = exs.filter((e) => mode === 'circuit' || r < e.sets.length);
@@ -132,7 +133,7 @@ export function buildSteps(plan, opts = {}) {
           const s = ex.sets[Math.min(r, ex.sets.length - 1)];
           steps.push(...makeSetSteps(block, ex, 'work', s,
             { setNo: r + 1, setCount: rounds, round: r + 1, rounds, groupPos: i, groupSize: part.length },
-            i === part.length - 1 ? roundRest : 0));
+            each ? (ex.rest ?? 60) : i === part.length - 1 ? roundRest : 0));
         });
       }
     }
@@ -225,10 +226,12 @@ export function completeStep(a, values, now) {
   } else {
     const t = a.timer;
     const spent = t ? Math.round((Math.min(now, t.endAt + 36e5) - t.startedAt) / 1000) : 0;
-    a.session.entries.push({
+    const te = {
       kind: 'timed', name: step.blockName, blockName: step.blockName, targetSec: step.seconds,
-      actualSec: values.actualSec ?? spent, note: values.note || '',
-    });
+      actualSec: values.actualSec ?? spent, note: values.note || '', stepIndex: step.index,
+    };
+    const ti = a.session.entries.findIndex((e) => e.kind === 'timed' && e.stepIndex === step.index);
+    if (ti >= 0) a.session.entries[ti] = te; else a.session.entries.push(te);
   }
   const next = nextIndex(a, a.stepIndex);
   a.rest = step.rest > 0 && next < a.steps.length
@@ -250,6 +253,73 @@ export function goBack(a, now) {
   if (p < 0) return false;
   a.stepIndex = p; a.rest = null; enterStep(a, now);
   return true;
+}
+// ---------- Reihenfolge im Training ändern (Gerät belegt) ----------
+/** Einheit = was zusammen verschoben wird: Einzelübung, oder ganzer Block bei Supersatz/Zirkel/Abwechselnd/Zeitblock. */
+export function unitKey(s) {
+  if (s.type === 'timed' || s.mode !== 'single') return 'b:' + s.blockId;
+  return `e:${s.blockId}:${s.exId}`;
+}
+export function isStepDone(a, s) {
+  if (s.type === 'set') return !!findRecorded(a, s);
+  // Einträge aus älteren Versionen haben keinen stepIndex: über den Blocknamen zuordnen
+  return a.session.entries.some((e) => e.kind === 'timed' && (e.stepIndex === s.index || (e.stepIndex === undefined && e.blockName === s.blockName)));
+}
+/** Alle noch offenen Einheiten in aktueller Reihenfolge (inkl. ausgelassener). */
+export function openUnits(a) {
+  const map = new Map();
+  a.steps.forEach((s, pos) => {
+    if (isStepDone(a, s)) return;
+    const k = unitKey(s);
+    let u = map.get(k);
+    if (!u) {
+      u = { key: k, pos, blockName: s.blockName, names: [], exIds: [], skippedNames: [], pending: 0, skipped: true, timed: s.type === 'timed' };
+      map.set(k, u);
+    }
+    if (s.type === 'set' && !u.exIds.includes(s.exId)) { u.exIds.push(s.exId); u.names.push(s.name); }
+    u.pending++;
+    const sk = s.type === 'set' && a.skipped.includes(s.exId);
+    if (!sk) u.skipped = false;
+    else if (!u.skippedNames.includes(s.name)) u.skippedNames.push(s.name);
+  });
+  return [...map.values()].map((u) => ({
+    ...u, label: u.timed ? u.blockName : u.key.startsWith('b:') ? `${u.blockName}: ${u.names.join(' + ')}` : u.names[0],
+  }));
+}
+function reorder(a, key, insertAt) {
+  const isU = (s) => unitKey(s) === key && !isStepDone(a, s);
+  const moving = a.steps.filter(isU);
+  const before = a.steps.slice(0, a.stepIndex).filter((s) => !isU(s));
+  const after = a.steps.slice(a.stepIndex).filter((s) => !isU(s));
+  const at = insertAt(after);
+  a.steps = [...before, ...after.slice(0, at), ...moving, ...after.slice(at)];
+  a.stepIndex = before.length;
+  return moving;
+}
+/** Einheit sofort machen (vorziehen bzw. ausgelassene Übung nachholen). */
+export function bringToFront(a, key, now) {
+  const moving = reorder(a, key, () => 0);
+  if (!moving.length) return false;
+  const ids = new Set(moving.filter((s) => s.type === 'set').map((s) => s.exId));
+  a.skipped = a.skipped.filter((id) => !ids.has(id));
+  enterStep(a, now);
+  return true;
+}
+/** Aktuelle Einheit hinter die nächste offene Einheit schieben. Liefert deren Bezeichnung oder null. */
+export function postponeCurrent(a, now) {
+  const cur = currentStep(a);
+  if (!cur) return null;
+  const key = unitKey(cur);
+  const nextU = a.steps.slice(a.stepIndex).find((s) => unitKey(s) !== key && !isStepDone(a, s) && !(s.type === 'set' && a.skipped.includes(s.exId)));
+  if (!nextU) return null;
+  const k2 = unitKey(nextU);
+  reorder(a, key, (after) => {
+    let last = -1;
+    after.forEach((s, i) => { if (unitKey(s) === k2) last = i; });
+    return last + 1;
+  });
+  enterStep(a, now);
+  return openUnits(a).find((u) => u.key === k2)?.label || '';
 }
 export function finalizeSession(a, now, aborted) {
   const s = a.session;

@@ -351,3 +351,91 @@ test('Plan übertragen: Verlauf bleibt beim Plan-Import erhalten', async () => {
   assert.deepEqual(await store.getPhotos(), { 2: 'data:image/jpeg;base64,NEU' });
   assert.deepEqual(await store.getMeta(), { lastExport: 123 });
 });
+
+test('Abwechselnd: Sätze alternieren, Pause nach jedem Satz', () => {
+  const p = defaultPlan();
+  const b = p.blocks.find((x) => x.id === 'b08'); // Scott-Curl + Trizeps
+  b.mode = 'alternate';
+  p.exercises[7].sets = [{ reps: 10, weight: 5 }, { reps: 10, weight: 5 }];
+  const st = L.buildSteps(p).filter((s) => s.blockId === 'b08');
+  assert.deepEqual(st.map((s) => `${s.exId}${s.setType === 'warmup' ? 'w' : ''}`), ['7w', '8w', '7', '8', '7', '8']);
+  assert.deepEqual(st.map((s) => s.rest), [30, 30, 60, 60, 60, 0]);
+  assert.ok(st.filter((s) => s.setType === 'work').every((s) => s.reps === 10));
+  // Supersatz zum Vergleich: Pause nur nach der Runde
+  b.mode = 'superset';
+  assert.deepEqual(L.buildSteps(p).filter((s) => s.blockId === 'b08').map((s) => s.rest), [0, 30, 0, 60, 0, 0]);
+});
+
+const doCur = (a, t = T0) => { const s = L.currentStep(a); return L.completeStep(a, s.type === 'timed' ? { actualSec: 60 } : { reps: s.reps, weight: s.weight ?? 20 }, t); };
+const curEx = (a) => L.currentStep(a)?.exId;
+
+test('Gerät belegt: Übung später machen', () => {
+  const a = L.newActive(defaultPlan(), T0);
+  doCur(a);                                   // Cardio
+  assert.equal(curEx(a), 1);
+  doCur(a);                                   // Aufwärmsatz Bankdrücken erledigt
+  const lbl = L.postponeCurrent(a, T0);
+  assert.equal(lbl, 'Enges Rudern');
+  assert.equal(curEx(a), 2);
+  // Rudern komplett, danach kommen die restlichen Bankdrück-Sätze
+  doCur(a); doCur(a); doCur(a);
+  assert.equal(curEx(a), 1);
+  assert.equal(L.currentStep(a).setType, 'work');
+  // bereits erfasster Aufwärmsatz bleibt gespeichert
+  assert.equal(a.session.entries.find((e) => e.exId === 1).sets.length, 1);
+});
+
+test('Gerät belegt: andere Übung vorziehen, ganze Supersatz-Blöcke wandern zusammen', () => {
+  const a = L.newActive(defaultPlan(), T0);
+  doCur(a);
+  const units = L.openUnits(a);
+  const sup = units.find((u) => u.key === 'b:b06');
+  assert.equal(sup.label, 'B Supersatz: Butterfly + Reverse Butterfly');
+  assert.equal(sup.pending, 6);
+  L.bringToFront(a, 'b:b06', T0);
+  assert.equal(curEx(a), 5);
+  doCur(a);
+  assert.equal(curEx(a), 6);                   // Abwechseln bleibt erhalten
+  // Bankdrücken steht direkt nach dem Supersatz an
+  for (let i = 0; i < 5; i++) doCur(a);
+  assert.equal(curEx(a), 1);
+});
+
+test('Auslassen ist nachholbar, auch am Ende', () => {
+  const plan = defaultPlan();
+  const a = L.newActive(plan, T0);
+  doCur(a);
+  L.skipCurrent(a, T0);                        // Bankdrücken auslassen
+  assert.equal(curEx(a), 2);
+  const sk = L.openUnits(a).find((u) => u.exIds.includes(1));
+  assert.equal(sk.skipped, true);
+  let r;
+  while (L.currentStep(a)) r = doCur(a);
+  assert.equal(r.finished, true);
+  const open = L.openUnits(a);
+  assert.deepEqual(open.map((u) => u.label), ['Bankdrücken liegend']);
+  assert.deepEqual(open[0].skippedNames, ['Bankdrücken liegend']);
+  L.bringToFront(a, open[0].key, T0);
+  assert.equal(curEx(a), 1);
+  while (L.currentStep(a)) doCur(a);
+  assert.equal(L.openUnits(a).length, 0);
+  const s = L.finalizeSession(a, T0 + 1, false);
+  assert.equal(L.sessionSetCount(s), L.buildSteps(plan).filter((x) => x.type === 'set').length);
+});
+
+test('Zeitblock erneut erfassen ersetzt den Eintrag', () => {
+  const a = L.newActive(defaultPlan(), T0);
+  L.completeStep(a, { actualSec: 300 }, T0);
+  L.goBack(a, T0);
+  L.completeStep(a, { actualSec: 600 }, T0);
+  const t = a.session.entries.filter((e) => e.kind === 'timed');
+  assert.equal(t.length, 1);
+  assert.equal(t[0].actualSec, 600);
+});
+
+test('Laufendes Training aus älterer Version: erledigter Zeitblock bleibt erledigt', () => {
+  const a = L.newActive(defaultPlan(), T0);
+  L.completeStep(a, { actualSec: 600 }, T0);
+  delete a.session.entries[0].stepIndex; // Stand vor diesem Update
+  assert.ok(!L.openUnits(a).some((u) => u.key === 'b:b01'));
+});

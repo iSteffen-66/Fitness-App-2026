@@ -203,6 +203,51 @@ await go('plan/ex/12'); await page.waitForSelector('.photo svg');
 ok(true, 'Übung 12: Platzhaltersymbol statt Foto');
 await ctx.setOffline(false);
 
+console.log('7b. Gerät belegt: später, vorziehen, auslassen und nachholen');
+{
+  const cx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const q = await cx.newPage();
+  q.on('pageerror', (e) => errors.push(e.message));
+  await q.goto(URL_); await q.waitForSelector('[data-act="start"]');
+  await q.click('[data-act="start"]'); await q.waitForSelector('#timerSec');
+  await q.click('[data-act="done"]'); await q.waitForSelector('#in-reps');
+  const h1 = () => q.locator('h1').first().innerText();
+  eq(await h1(), 'Bankdrücken liegend', 'Start mit Bankdrücken');
+  await q.click('[data-act="order"]'); await q.waitForSelector('#modal [data-m="later"]');
+  const ow = await q.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: innerWidth }));
+  ok(ow.sw <= ow.iw, 'Auswahl „Gerät belegt?“ ohne horizontales Scrollen');
+  await q.screenshot({ path: path.join(SHOTS, '19-geraet-belegt.png') });
+  await q.click('#modal [data-m="later"]'); await q.waitForTimeout(150);
+  eq(await h1(), 'Enges Rudern', 'Später: nächste Übung kommt dran');
+  await q.click('[data-act="order"]'); await q.click('#modal [data-m="go|b:b06"]'); await q.waitForTimeout(150);
+  eq(await h1(), 'Butterfly', 'Supersatz B vorgezogen');
+  await q.click('[data-act="order"]'); await q.click('#modal [data-m="skip"]'); await q.waitForTimeout(150);
+  eq(await h1(), 'Reverse Butterfly', 'Butterfly ausgelassen, Supersatz läuft weiter');
+  ok(/ausgelassene Übung/.test(await q.locator('#app').innerText()), 'Hinweis auf ausgelassene Übung');
+  await q.click('[data-act="order"]'); await q.waitForSelector('#modal [data-m="go|b:b06"]');
+  ok(/Wieder aufnehmen: Butterfly/.test(await q.locator('#modal').innerText()), 'Ausgelassene Übung im laufenden Block wieder aufnehmbar');
+  await q.click('#modal [data-m="x"]');
+  // Rest durchklicken
+  for (let i = 0; i < 200 && q.url().includes('#/training'); i++) {
+    if (await q.locator('[data-act="finishnow"]').count()) break;
+    const w = q.locator('#in-weight');
+    if (await w.count() && (await w.inputValue()) === '') await w.fill('20');
+    await q.click('[data-act="done"]'); await q.waitForTimeout(30);
+  }
+  ok(/Noch offen/.test(await q.locator('h1').first().innerText()), 'Am Ende: ausgelassene Übung wird angeboten');
+  await q.screenshot({ path: path.join(SHOTS, '20-noch-offen.png') });
+  await q.click('[data-act="bring"]'); await q.waitForTimeout(150);
+  eq(await h1(), 'Butterfly', 'Ausgelassene Übung nachgeholt');
+  for (let i = 0; i < 10 && q.url().includes('#/training'); i++) { await q.click('[data-act="done"]'); await q.waitForTimeout(30); }
+  await q.waitForURL(/#\/history\/\w+/);
+  const ss = await q.evaluate(() => __app.S.sessions[0]);
+  const bf = ss.entries.find((e) => e.exId === 5);
+  ok(bf && bf.sets.filter((x) => x.type === 'work').length === 2, 'Butterfly-Arbeitssätze gespeichert');
+  const total = await q.evaluate(() => __app.L.buildSteps(__app.S.plan).filter((x) => x.type === 'set').length);
+  eq(ss.entries.reduce((n, e) => n + (e.sets ? e.sets.length : 0), 0), total, 'Alle Sätze trotz geänderter Reihenfolge gespeichert');
+  await cx.close();
+}
+
 console.log('8. Timer nach Display-aus (2 min) – simulierte Uhr');
 const p2 = await ctx.newPage();
 await p2.clock.install({ time: new Date('2026-11-02T10:00:00') });

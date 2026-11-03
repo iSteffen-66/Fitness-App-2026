@@ -33,7 +33,8 @@ function modal(html) {
           const o = {};
           m.querySelectorAll('[name]').forEach((i) => { o[i.name] = i.type === 'checkbox' ? i.checked : i.value; });
           close(o);
-        } else close(null);
+        } else if (b.dataset.m === 'x') close(null);
+        else close({ choice: b.dataset.m });
       } else if (e.target === m) close(null);
     };
   });
@@ -184,15 +185,22 @@ function initForm() {
   } else S.ui.form = { idx: step.index, minutes: '', note: '' };
 }
 
+const MODE_NAME = { single: 'Einzeln', superset: 'Supersatz', circuit: 'Zirkel', alternate: 'Abwechselnd' };
 function setLabel(step) {
   if (step.setType === 'warmup') return 'Aufwärmsatz';
-  return step.mode === 'single' ? `Arbeitssatz ${step.setNo}/${step.setCount}` : `Runde ${step.round}/${step.rounds}`;
+  if (step.mode === 'single') return `Arbeitssatz ${step.setNo}/${step.setCount}`;
+  return step.mode === 'alternate' ? `Satz ${step.round}/${step.rounds}` : `Runde ${step.round}/${step.rounds}`;
 }
 
 function viewTraining() {
   const a = S.active, now = Date.now();
   const step = L.currentStep(a);
-  if (!step) return '<div class="card">Alle Schritte erledigt.</div><button class="btn" data-act="finishnow">Training abschließen</button>';
+  if (!step) {
+    const open = L.openUnits(a);
+    let e = `<h1>${open.length ? 'Noch offen' : 'Alles erledigt'}</h1>`;
+    if (open.length) e += '<p class="muted">Diese Übungen hast du ausgelassen. Du kannst sie jetzt nachholen oder das Training beenden.</p>' + open.map(unitRow).join('');
+    return e + `<button class="btn ${open.length ? 'ghost' : 'ok'}" style="margin-top:12px" data-act="finishnow">Training abschließen</button>`;
+  }
   if (S.ui.form.idx !== step.index) initForm();
   const f = S.ui.form;
   const blk = a.blocks.find((b) => b.id === step.blockId);
@@ -220,7 +228,8 @@ function viewTraining() {
       <input id="in-min" inputmode="decimal" data-in="form.minutes" value="${esc(f.minutes)}" placeholder="leer = verstrichene Zeit des Timers">
       <label class="f" for="in-note">Gerät / Notiz (optional)</label>
       <input id="in-note" data-in="form.note" value="${esc(f.note)}" placeholder="z. B. Crosstrainer">
-      <div class="cta"><div class="row"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ok" data-act="done">Fertig</button></div></div>`;
+      <div class="cta"><div class="row"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ok" data-act="done">Fertig</button></div></div>
+      <button class="btn ghost" style="margin-top:8px" data-act="order">Später / andere Übung</button>${openHint(a)}`;
     return h;
   }
   const ex = S.plan.exercises[step.exId] || {};
@@ -232,7 +241,7 @@ function viewTraining() {
   h += photoHTML(step.exId);
   h += `<h1>${esc(step.name)}</h1><div class="muted">${esc(ex.device || '')}</div><div style="margin-top:8px">
     <span class="tag ac">${setLabel(step)}</span>${step.side ? `<span class="tag g">${step.side === 'links' ? 'Links' : 'Rechts'}${step.unit === 'kg je Arm' ? ' (Arm)' : ''}</span>` : ''}
-    ${step.mode !== 'single' && step.groupSize > 1 ? `<span class="tag">${step.mode === 'circuit' ? 'Zirkel' : 'Supersatz'} · Übung ${step.groupPos + 1}/${step.groupSize}</span>` : ''}
+    ${step.mode !== 'single' && step.groupSize > 1 ? `<span class="tag">${MODE_NAME[step.mode]} · Übung ${step.groupPos + 1}/${step.groupSize}</span>` : ''}
     ${step.optional ? '<span class="tag w">optional</span>' : ''}${rec ? '<span class="tag g">erfasst</span>' : ''}</div>`;
   if (ex.tech) h += `<p class="sm">${esc(ex.tech)}</p>`;
   h += `<div class="soll">Soll: <b>${step.reps} Wdh.</b>${weighted ? (open ? ' · Gewicht offen' : ` × <b>${fmtNum(step.weight)} ${esc(step.unit)}</b>`) : ''}${step.text ? ` <span class="muted">(${esc(step.text)})</span>` : ''}</div>`;
@@ -248,8 +257,41 @@ function viewTraining() {
       <button class="btn ghost" data-act="adj" data-f="weight" data-d="${L.stepOf(ex) || 1}" aria-label="mehr">+</button></div></div>` : ''}</div>
     ${next ? `<p class="sm muted">Danach: ${next.type === 'timed' ? esc(next.blockName) : esc(next.name) + (next.side ? ' (' + next.side + ')' : '')}</p>` : ''}
     <div class="cta"><button class="btn ok" data-act="done">Erledigt</button></div>
-    <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ghost" data-act="skip">Übung überspringen</button></div>`;
+    <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ghost" data-act="order">Gerät belegt?</button></div>
+    ${openHint(a)}`;
   return h;
+}
+
+const unitRow = (u) => `<div class="item"><div class="grow"><div class="t">${esc(u.label)}</div>
+  <div class="s">${u.timed ? 'Zeitblock' : `${u.pending} ${u.pending === 1 ? 'Satz' : 'Sätze'} offen`}${u.timed || u.key.startsWith('b:') ? '' : ' · ' + esc(u.blockName)}${u.skippedNames.length ? ` · <span class="tag w">ausgelassen: ${esc(u.skippedNames.join(', '))}</span>` : ''}</div></div>
+  <button class="btn sm ok" data-act="bring" data-key="${esc(u.key)}">Jetzt</button></div>`;
+function openHint(a) {
+  const n = L.openUnits(a).reduce((k, u) => k + u.skippedNames.length, 0);
+  return n ? `<p class="sm muted" style="margin-top:8px">${n} ausgelassene Übung${n === 1 ? '' : 'en'} – über „${L.currentStep(a)?.type === 'timed' ? 'Später / andere Übung' : 'Gerät belegt?'}“ jederzeit nachholbar.</p>` : '';
+}
+async function orderSheet() {
+  const a = S.active, cur = L.currentStep(a);
+  if (!cur) return;
+  const curKey = L.unitKey(cur);
+  const all = L.openUnits(a);
+  const me = all.find((u) => u.key === curKey);
+  const others = all.filter((u) => u.key !== curKey);
+  const next = others.find((u) => !u.skipped);
+  const btnRow = (u) => `<div class="item"><div class="grow"><div class="t">${esc(u.label)}</div>
+    <div class="s">${u.timed ? 'Zeitblock' : `${u.pending} ${u.pending === 1 ? 'Satz' : 'Sätze'} offen`}${u.skippedNames.length ? ' · ausgelassen: ' + esc(u.skippedNames.join(', ')) : ''}</div></div>
+    <button class="btn sm ok" data-m="go|${esc(u.key)}">Jetzt</button></div>`;
+  const r = await modal(`<h3>Gerät belegt?</h3><p class="sm muted">Aktuell: <b>${esc(me ? me.label : cur.name || cur.blockName)}</b>. Nichts geht verloren: Erfasste Sätze bleiben gespeichert, offene Sätze kannst du jederzeit nachholen.</p>
+    <button class="btn" data-m="later" ${next ? '' : 'disabled'}>Später machen${next ? ` (nach „${esc(next.label)}“)` : ''}</button>
+    ${cur.type === 'set' ? '<button class="btn ghost" style="margin-top:8px" data-m="skip">Auslassen (bleibt nachholbar)</button>' : ''}
+    ${me && me.skippedNames.length ? `<button class="btn ghost" style="margin-top:8px" data-m="go|${esc(curKey)}">Wieder aufnehmen: ${esc(me.skippedNames.join(', '))}</button>` : ''}
+    ${others.length ? `<h3 style="margin-top:16px">Stattdessen jetzt machen</h3>${others.map(btnRow).join('')}` : ''}
+    <div class="row"><button class="btn ghost" data-m="x">Abbrechen</button></div>`);
+  if (!r) return;
+  const now = Date.now();
+  if (r.choice === 'later') { const l = L.postponeCurrent(a, now); toast(l ? `Verschoben hinter „${l}“.` : 'Keine weitere offene Übung.'); }
+  else if (r.choice === 'skip') L.skipCurrent(a, now);
+  else if (r.choice.startsWith('go|')) L.bringToFront(a, r.choice.slice(3), now);
+  await persistActive(); initForm(); rerender(); window.scrollTo(0, 0);
 }
 
 async function startTraining() {
@@ -290,7 +332,7 @@ async function doneStep() {
     res = L.completeStep(a, { actualSec: Math.round((m ?? def) * 60), note: f.note }, Date.now());
   }
   await persistActive();
-  if (res.finished) { await finishTraining(false); return; }
+  if (res.finished && !L.openUnits(a).length) { await finishTraining(false); return; }
   initForm(); rerender(); window.scrollTo(0, 0);
 }
 
@@ -425,7 +467,7 @@ function viewPlan() {
   let h = `<h1>Plan</h1><p class="muted">Gesamtdauer: <b>${L.planTotalMinutes(p)} min</b> (aus den Blockzeiten berechnet). Zum Sortieren am ☰ ziehen oder die Pfeile nutzen. Antippen bearbeitet.</p><div data-sort="blocks">`;
   for (const b of p.blocks) {
     h += `<div class="block" data-id="${b.id}"><div class="row"><span class="drag" aria-hidden="true">☰</span>
-      <a class="grow" style="text-decoration:none;color:inherit;flex:1;min-width:0" href="#/plan/block/${b.id}"><div class="t"><b>${esc(b.name)}</b></div><div class="s sm muted">${L.fmtWindow(b)}${b.mode === 'superset' ? ' · Supersatz' : b.mode === 'circuit' ? ` · Zirkel ${b.rounds}×` : ''}${b.kind === 'timed' ? ' · Zeit ' + fmtNum(b.minutes) + ' min' : ''}</div></a>
+      <a class="grow" style="text-decoration:none;color:inherit;flex:1;min-width:0" href="#/plan/block/${b.id}"><div class="t"><b>${esc(b.name)}</b></div><div class="s sm muted">${L.fmtWindow(b)}${b.mode === 'superset' ? ' · Supersatz' : b.mode === 'alternate' ? ' · Abwechselnd' : b.mode === 'circuit' ? ` · Zirkel ${b.rounds}×` : ''}${b.kind === 'timed' ? ' · Zeit ' + fmtNum(b.minutes) + ' min' : ''}</div></a>
       <div class="row fit">${arrows('block', b.id)}</div></div>`;
     if (b.kind !== 'timed') {
       h += `<div data-sort="items" data-key="${b.id}">`;
@@ -509,7 +551,8 @@ function viewPlanBlock(id) {
   if (d.kind === 'timed') h += `<label class="f" for="b-min">Dauer (min)</label><input id="b-min" inputmode="decimal" data-in="bd.minutes" value="${esc(d.minutes)}">
     <label class="f" for="b-note">Hinweis</label><textarea id="b-note" data-in="bd.note">${esc(d.note)}</textarea>`;
   else {
-    h += `<label class="f" for="b-mode">Ablauf</label><select id="b-mode" data-in="bd.mode" data-rr>${opt('single', 'Einzeln nacheinander', d.mode)}${opt('superset', 'Supersatz (abwechselnd, Pause nach der Runde)', d.mode)}${opt('circuit', 'Zirkel (feste Rundenzahl)', d.mode)}</select>`;
+    h += `<label class="f" for="b-mode">Ablauf</label><select id="b-mode" data-in="bd.mode" data-rr>${opt('single', 'Einzeln nacheinander', d.mode)}${opt('alternate', 'Abwechselnd (Pause nach jedem Satz)', d.mode)}${opt('superset', 'Supersatz (abwechselnd, Pause erst nach der Runde)', d.mode)}${opt('circuit', 'Zirkel (feste Rundenzahl)', d.mode)}</select>
+      <p class="sm muted">Abwechselnd und Supersatz: Übung 1 Satz 1, Übung 2 Satz 1, Übung 1 Satz 2 … Reihenfolge der Übungen im Plan festlegen. Zirkel: alle Übungen je Runde, Pause nach der Runde.</p>`;
     if (d.mode === 'circuit') h += `<div class="grid2"><div><label class="f" for="b-rounds">Runden</label><input id="b-rounds" inputmode="numeric" data-in="bd.rounds" value="${esc(d.rounds)}"></div>
       <div><label class="f" for="b-rr">Pause nach Runde (s)</label><input id="b-rr" inputmode="numeric" data-in="bd.roundRest" value="${esc(d.roundRest)}"></div></div>`;
   }
@@ -646,14 +689,8 @@ const ACT = {
     if (!L.goBack(S.active, Date.now())) { toast('Das ist der erste Schritt.'); return; }
     await persistActive(); initForm(); rerender();
   },
-  async skip() {
-    const step = L.currentStep(S.active);
-    if (step.type === 'set' && !(await confirmBox(`„${step.name}“ überspringen?`, 'Überspringen', 'ok'))) return;
-    L.skipCurrent(S.active, Date.now());
-    await persistActive();
-    if (!L.currentStep(S.active)) { await finishTraining(false); return; }
-    initForm(); rerender();
-  },
+  order: orderSheet,
+  async bring(d, el) { L.bringToFront(S.active, el.dataset.key, Date.now()); await persistActive(); initForm(); rerender(); window.scrollTo(0, 0); },
   adj(d, el) {
     const f = el.dataset.f, cur = parseNum(S.ui.form[f]) ?? 0;
     const v = Math.max(0, Math.round((cur + Number(el.dataset.d)) * 100) / 100);

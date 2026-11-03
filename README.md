@@ -32,7 +32,7 @@ Dann `http://localhost:8080` öffnen. (Service Worker und Wake Lock funktioniere
 ## Tests
 
 ```
-node --test tests/logic.test.js                      # Datenlogik, 23 Tests
+node --test tests/logic.test.js                      # Datenlogik, 29 Tests
 npm start &                                          # Webserver auf Port 8080
 NODE_PATH=$(npm root -g) node tests/e2e.mjs          # Oberfläche im Handy-Viewport, offline, Export/Import, Timer
 ```
@@ -58,6 +58,24 @@ Update veröffentlichen:
 ## Daten sichern
 
 Alle Daten liegen nur in diesem Browser. **Safari kann sie auf dem iPhone löschen** (Speicherknappheit, lange nicht genutzt, „Websitedaten löschen“). Daher: Tab **Sicherung** → **Alles exportieren (JSON)** und die Datei in iCloud/Dateien ablegen. Das passiert am besten nach jedem Training oder mindestens wöchentlich. Import ersetzt alle Daten durch den Inhalt der Datei. Der Verlauf lässt sich zusätzlich als CSV exportieren (Semikolon, Dezimalkomma, für Excel).
+
+## Gerät belegt? Reihenfolge im Training ändern
+
+Im Training öffnet **„Gerät belegt?“** (bei Cardio: „Später / andere Übung“) eine Auswahl:
+- **Später machen:** Die aktuelle Übung rückt hinter die nächste offene Übung. Mehrfach tippen schiebt sie weiter nach hinten.
+- **Stattdessen jetzt machen:** Jede offene Übung lässt sich vorziehen.
+- **Auslassen:** Die Übung wird übersprungen, bleibt aber offen und lässt sich jederzeit über dieselbe Auswahl nachholen. Am Ende fragt die App nach noch offenen Übungen.
+
+Supersätze, Zirkel und Blöcke mit „Abwechselnd“ werden als Ganzes verschoben, damit das Abwechseln erhalten bleibt. Bereits erfasste Sätze bleiben gespeichert, verschoben werden nur offene Sätze.
+
+## Übungen abwechselnd trainieren
+
+Plan → Block antippen → **Ablauf**:
+- **Abwechselnd (Pause nach jedem Satz):** Übung 1 Satz 1, Pause, Übung 2 Satz 1, Pause, Übung 1 Satz 2 …
+- **Supersatz:** gleiche Reihenfolge, aber Pause erst nach jeder Runde.
+- **Zirkel:** alle Übungen je Runde, feste Rundenzahl, Pause nach der Runde.
+
+Welche Übungen abwechseln, legst du fest, indem du sie in denselben Block legst (Übung bearbeiten → Feld „Block“). Die Reihenfolge im Block bestimmt, welche zuerst kommt.
 
 ## Plan auf mehreren Geräten nutzen
 
