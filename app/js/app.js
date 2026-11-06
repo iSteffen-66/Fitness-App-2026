@@ -92,6 +92,12 @@ const photoHTML = (exId) => {
   const s = photoSrc(exId);
   return `<div class="photo">${s ? `<img src="${esc(s)}" alt="Foto: ${esc(S.plan.exercises[exId]?.name)}">` : ICON_PH}</div>`;
 };
+/** Kleines Vorschaubild für die Planliste (eigenes Foto, Standardbild oder Platzhalter). */
+const thumb = (exId) => {
+  const s = photoSrc(exId);
+  return s ? `<img class="thumb" src="${esc(s)}" alt="">`
+    : `<span class="thumb ph" aria-hidden="true">${ICON_PH.replace('<svg', '<svg style="width:22px;height:22px"')}</span>`;
+};
 const miniPhoto = (exId) => {
   const s = photoSrc(exId);
   return s ? `<img class="mini" src="${esc(s)}" alt="">` : `<div class="mini photo" style="height:64px;min-height:0">${ICON_PH.replace('<svg', '<svg style="width:28px;height:28px"')}</div>`;
@@ -486,7 +492,7 @@ function viewPlan() {
       h += `<div data-sort="items" data-key="${b.id}">`;
       for (const eid of b.items || []) {
         const ex = p.exercises[eid]; if (!ex) continue;
-        h += `<div class="item" data-id="${eid}"><span class="drag" aria-hidden="true">☰</span><a class="grow" style="text-decoration:none;color:inherit" href="#/plan/ex/${eid}"><div class="t ellip">#${eid} ${esc(ex.name)}</div><div class="s ellip">${esc(exSummary(ex))}</div></a>
+        h += `<div class="item" data-id="${eid}"><span class="drag" aria-hidden="true">☰</span><a class="grow exlink" href="#/plan/ex/${eid}">${thumb(eid)}<span class="txt"><div class="t clamp2">#${eid} ${esc(ex.name)}</div><div class="s ellip">${esc(exSummary(ex))}</div></span></a>
           <div class="row fit">${arrows('item', eid, b.id)}</div></div>`;
       }
       h += `</div><button class="btn ghost sm" style="width:100%" data-act="addEx" data-b="${b.id}">+ Übung in diesen Block</button>`;

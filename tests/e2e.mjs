@@ -98,6 +98,12 @@ eq(await page.evaluate(() => __app.S.sessions.length), 1, 'ganzes Training gelö
 
 console.log('4. Plan-Editor');
 await go('plan'); await hscroll('Plan'); await shot('12-plan');
+{
+  const nItems = await page.locator('[data-sort="items"] > .item').count();
+  eq(await page.locator('[data-sort="items"] > .item .thumb').count(), nItems, 'Plan: jede Übung hat ein Vorschaubild');
+  eq(await page.locator('[data-sort="items"] > .item[data-id="2"] img.thumb').getAttribute('src'), 'img/02.webp', 'Plan: Vorschaubild zeigt Standardbild (Übung 2)');
+  ok(await page.locator('[data-sort="items"] > .item[data-id="12"] .thumb.ph svg').count() === 1, 'Plan: Platzhalter bei Übung ohne Foto (12)');
+}
 eq(await page.locator('#p-chg').inputValue(), '60', 'Plan: Wechselzeit zwischen Blöcken 60 s');
 ok((await page.locator('text=↓ danach 1 min Wechselzeit').count()) === 7, 'Plan: 7 Übergänge mit 1 min Wechselzeit angezeigt');
 ok(/A Roter Käfig[\s\S]*30 s Wechsel zwischen Übungen/.test(await page.locator('[data-sort="blocks"]').innerText()), 'Plan: Roter Käfig mit 30 s Wechsel zwischen Übungen');
@@ -144,6 +150,10 @@ if (OWN_PHOTO) {
   const dim = await page.evaluate(() => new Promise((res) => { const i = new Image(); i.onload = () => res([i.width, i.height]); i.src = __app.S.photos[1]; }));
   ok(dim[0] === 1200 && dim[1] === 800, `eigenes Foto auf 1200 px verkleinert (${dim})`);
   await shot('16-eigenes-foto');
+  await go('plan'); await page.waitForSelector('[data-sort="items"] > .item[data-id="1"] img.thumb');
+  const t1 = await page.locator('[data-sort="items"] > .item[data-id="1"] img.thumb').getAttribute('src');
+  ok(t1 && t1.startsWith('data:image/'), 'Plan: Vorschaubild zeigt eigenes Foto (Übung 1)');
+  await shot('26-plan-vorschaubilder');
 }
 
 console.log('6. Sicherung: Export → löschen → Import');

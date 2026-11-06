@@ -128,7 +128,7 @@ Dabei gilt:
 - **Supersatz/Zirkel:** Übungen wechseln sich ab, Pause erst nach der Runde. Übungen „je Seite/Arm“ erfassen links und rechts getrennt.
 - **Übung 14** hat kein Soll-Gewicht: Der erste eingegebene Wert wird zum neuen Soll.
 - **Verlauf:** Trainings und Sätze bearbeiten oder löschen; Tab „Übungen“ zeigt den Gewichtsverlauf und den Steigerungshinweis.
-- **Plan:** Übungen/Blöcke ändern, per ☰ ziehen oder mit Pfeilen sortieren, Fotos ersetzen, Zeiten anpassen, Ausgangsplan wiederherstellen.
+- **Plan:** jede Übung mit Vorschaubild (eigenes Foto, Standardbild oder Platzhalter); Übungen/Blöcke ändern, per ☰ ziehen oder mit Pfeilen sortieren, Fotos ersetzen, Zeiten anpassen, Ausgangsplan wiederherstellen.
 
 ## Annahmen im Plan (bitte prüfen)
 
