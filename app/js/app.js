@@ -589,7 +589,7 @@ function viewBackup() {
     <button class="btn" data-act="exportJson">Alles exportieren (JSON)</button>
     ${typeof navigator.canShare === 'function' ? '<button class="btn ghost" style="margin-top:10px" data-act="shareJson">Sicherung teilen / in Dateien sichern</button>' : ''}
     <button class="btn ghost" style="margin-top:10px" data-act="exportCsv">Verlauf als CSV exportieren</button>
-    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" accept="application/json,.json" data-import hidden>Sicherung importieren (JSON)</label>
+    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" data-import hidden>Sicherung importieren (JSON)</label>
     <p class="sm muted">Der Import einer Sicherung ersetzt <b>alles</b> auf diesem Gerät, auch den Verlauf.</p>
     ${planTransferHTML()}
     <h2>Gefahrenbereich</h2><button class="btn danger" data-act="wipe">Alle Daten löschen</button>`;
@@ -601,7 +601,8 @@ function planTransferHTML() {
     <ol class="sm muted" style="padding-left:20px;margin:6px 0 10px"><li>Hier auf dem Gerät mit dem geänderten Plan: ${share ? '„Plan teilen“ (z. B. per AirDrop) oder ' : ''}„Plan exportieren“.</li><li>Auf dem anderen Gerät: „Plan importieren“ und die Datei wählen.</li></ol>
     ${share ? '<button class="btn" data-act="sharePlan">Plan teilen (AirDrop, Dateien …)</button>' : ''}
     <button class="btn ${share ? 'ghost' : ''}" style="margin-top:10px" data-act="exportPlan">Plan exportieren</button>
-    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" accept="application/json,.json" data-planimport hidden>Plan importieren</label>
+    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" data-planimport hidden>Plan importieren (Datei)</label>
+    <button class="btn ghost" style="margin-top:10px" data-act="pastePlan">Plan aus Text einfügen</button>
     ${S.meta.planImportedAt ? `<p class="sm muted">Zuletzt importiert: ${dateFmt(S.meta.planImportedAt)} ${timeFmt(S.meta.planImportedAt)}${S.meta.planSourceAt ? ` (Stand vom ${dateFmt(S.meta.planSourceAt)} ${timeFmt(S.meta.planSourceAt)})` : ''}</p>` : ''}`;
 }
 function download(name, text, mime) {
@@ -617,20 +618,41 @@ const planJSON = () => JSON.stringify(L.buildPlanExport(S.plan, S.photos));
 const planFileName = () => `training-plan-${stamp()}.json`;
 
 async function doPlanImport(file) {
+  let text;
+  try { text = await file.text(); } catch (e) { toast('Datei konnte nicht gelesen werden: ' + e.message); return; }
+  await importPlanText(text);
+}
+async function importPlanText(text) {
   let obj;
-  try { obj = JSON.parse(await file.text()); } catch { toast('Die Datei ist kein gültiges JSON.'); return; }
+  try { obj = JSON.parse(String(text).trim()); } catch { toast('Kein gültiger Plan (JSON unvollständig oder beschädigt).'); return; }
   const r = L.readPlanImport(obj);
   if (!r.ok) { toast(r.error); return; }
-  const nEx = Object.keys(r.plan.exercises).length, nPh = Object.keys(r.photos).length;
+  const nEx = Object.keys(r.plan.exercises).length;
+  const phTxt = r.photos === null ? 'eigene Fotos bleiben unverändert' : `${Object.keys(r.photos).length} eigene Fotos`;
   const when = r.exportedAt ? ` vom ${dateFmt(r.exportedAt)} ${timeFmt(r.exportedAt)}` : '';
-  const ok = await confirmBox(`Plan${when} übernehmen? (${r.plan.blocks.length} Blöcke, ${nEx} Übungen, ${nPh} eigene Fotos)${r.fromBackup ? ' Aus der Sicherung wird nur der Plan übernommen.' : ''} Der aktuelle Plan auf diesem Gerät wird ersetzt, der Verlauf bleibt erhalten.`, 'Plan übernehmen', 'ok');
+  const ok = await confirmBox(`Plan${when} übernehmen? (${r.plan.blocks.length} Blöcke, ${nEx} Übungen, ${phTxt})${r.fromBackup ? ' Aus der Sicherung wird nur der Plan übernommen.' : ''} Der aktuelle Plan auf diesem Gerät wird ersetzt, der Verlauf bleibt erhalten.`, 'Plan übernehmen', 'ok');
   if (!ok) return;
-  const photos = L.mergePlanPhotos(S.photos, r.plan, r.photos);
-  await store.replacePlan(r.plan, photos);
-  S.plan = await store.getPlan(); S.photos = await store.getPhotos();
-  S.meta.planImportedAt = Date.now(); S.meta.planSourceAt = r.exportedAt; await store.saveMeta(S.meta);
+  try {
+    const photos = L.mergePlanPhotos(S.photos, r.plan, r.photos);
+    await store.replacePlan(r.plan, photos);
+    S.plan = await store.getPlan(); S.photos = await store.getPhotos();
+    S.meta.planImportedAt = Date.now(); S.meta.planSourceAt = r.exportedAt; await store.saveMeta(S.meta);
+  } catch (e) {
+    console.error(e);
+    await modal(`<h3>Plan konnte nicht gespeichert werden</h3><p class="sm">${esc(e && (e.name + ': ' + e.message))}</p>
+      <p class="sm muted">Häufigste Ursache auf dem iPhone: zu wenig freier Speicher. Versuche es mit der kleinen Plan-Datei ohne Fotos oder mit „Plan aus Text einfügen“.</p>
+      <div class="row"><button class="btn" data-m="x">OK</button></div>`);
+    return;
+  }
   S.ui.xd = null; S.ui.bd = null;
   toast(S.active ? 'Plan übernommen. Gilt ab dem nächsten Training.' : 'Plan übernommen.'); rerender();
+}
+async function pastePlan() {
+  const r = await modal(`<h3>Plan aus Text einfügen</h3><p class="sm muted">Den Plan-Text (beginnt mit <code>{"app":"fitness-app-2026"</code>) kopieren und hier einfügen.</p>
+    <textarea id="m-plan" name="txt" style="min-height:180px;font-size:13px" placeholder="Hier einfügen"></textarea>
+    <div class="row"><button class="btn ghost" data-m="x">Abbrechen</button><button class="btn ok" data-m="ok">Weiter</button></div>`);
+  if (!r || !r.txt.trim()) return;
+  await importPlanText(r.txt);
 }
 
 async function doImport(file) {
@@ -640,7 +662,9 @@ async function doImport(file) {
   if (!v.ok) { toast(v.error); return; }
   const ok = await confirmBox(`Alle aktuellen Daten durch die Sicherung ersetzen? (${obj.sessions.length} Trainings, ${Object.keys(obj.photos || {}).length} Fotos)`, 'Importieren', 'ok');
   if (!ok) return;
-  await store.replaceAll({ plan: obj.plan, sessions: obj.sessions, photos: obj.photos || {} });
+  try { await store.replaceAll({ plan: obj.plan, sessions: obj.sessions, photos: obj.photos || {} }); } catch (e) {
+    console.error(e); toast('Import konnte nicht gespeichert werden: ' + (e && e.message)); return;
+  }
   S.plan = await store.getPlan(); S.sessions = await store.listSessions(); S.photos = await store.getPhotos(); S.active = null;
   S.ui.xd = null; S.ui.bd = null;
   toast('Import abgeschlossen.'); rerender();
@@ -836,6 +860,7 @@ const ACT = {
       else toast('Teilen wird hier nicht unterstützt. Nutze „Alles exportieren“.');
     } catch (e) { if (e.name !== 'AbortError') toast('Teilen fehlgeschlagen.'); }
   },
+  pastePlan,
   exportPlan() { download(planFileName(), planJSON(), 'application/json'); },
   async sharePlan() {
     const file = new File([planJSON()], planFileName(), { type: 'application/json' });

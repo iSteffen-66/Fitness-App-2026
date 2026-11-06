@@ -554,7 +554,9 @@ export function readPlanImport(o) {
   if (o.app !== APP_ID) return { ok: false, error: 'Die Datei stammt nicht aus dieser App.' };
   const vp = validatePlan(o.plan); if (!vp.ok) return vp;
   const vf = validatePhotos(o.photos); if (!vf.ok) return vf;
-  return { ok: true, plan: o.plan, photos: o.photos || {}, exportedAt: o.exportedAt || null, fromBackup: o.kind !== 'plan' };
+  // Plan-Datei ohne „photos“ (z. B. kleine Datei zum Einfügen): vorhandene eigene Fotos bleiben unverändert
+  const photos = o.photos === undefined || o.photos === null ? null : o.photos;
+  return { ok: true, plan: o.plan, photos, exportedAt: o.exportedAt || null, fromBackup: o.kind !== 'plan' };
 }
 /**
  * Fotos nach dem Plan-Import: Für Übungen des neuen Plans gilt genau der Stand der Datei
@@ -562,6 +564,7 @@ export function readPlanImport(o) {
  */
 export function mergePlanPhotos(current, plan, incoming) {
   const out = { ...current };
+  if (incoming === null || incoming === undefined) return out; // Datei ohne Fotos: nichts ändern
   for (const id of Object.keys(plan.exercises)) {
     if (incoming[id]) out[id] = incoming[id]; else delete out[id];
   }

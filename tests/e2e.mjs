@@ -194,6 +194,21 @@ eq(await pb.evaluate(() => __app.S.plan.exercises[4].name), 'Schulterdrücken Ge
 // Plan-Datei im Sicherungs-Import wird abgewiesen
 await pb.setInputFiles('[data-import]', planFile); await pb.waitForTimeout(300);
 ok(/Plan importieren/.test(await pb.locator('#toast').innerText()), 'Plan-Datei im vollständigen Import wird abgewiesen');
+// Kleine Plan-Datei ohne Fotos per „Plan aus Text einfügen“: eigenes Foto auf Gerät B bleibt
+const slim = { ...pf }; delete slim.photos; slim.plan = structuredClone(pf.plan); slim.plan.exercises[2].name = 'Rudern per Text';
+await pb.evaluate((x) => { location.hash = x; }, 'backup'); await pb.waitForSelector('[data-act="pastePlan"]');
+const photosBefore = await pb.evaluate(() => Object.keys(__app.S.photos).join());
+await pb.click('[data-act="pastePlan"]'); await pb.waitForSelector('#m-plan');
+await pb.fill('#m-plan', JSON.stringify(slim)); await pb.click('#modal [data-m="ok"]');
+await pb.waitForSelector('#modal [data-m="ok"]');
+ok(/eigene Fotos bleiben unverändert/.test(await pb.locator('#modal').innerText()), 'Text-Import: Rückfrage nennt, dass Fotos bleiben');
+await pb.click('#modal [data-m="ok"]'); await pb.waitForTimeout(400);
+eq(await pb.evaluate(() => __app.S.plan.exercises[2].name), 'Rudern per Text', 'Text-Import: Plan übernommen');
+eq(await pb.evaluate(() => Object.keys(__app.S.photos).join()), photosBefore, 'Text-Import ohne Fotos: eigene Fotos unverändert');
+await pb.click('[data-act="pastePlan"]'); await pb.waitForSelector('#m-plan');
+await pb.fill('#m-plan', '{"app":"fitness-app-2026","plan":'); await pb.click('#modal [data-m="ok"]'); await pb.waitForTimeout(300);
+ok(/Kein gültiger Plan/.test(await pb.locator('#toast').innerText()), 'Text-Import: unvollständiger Text wird verständlich abgewiesen');
+ok(await pb.evaluate(() => !document.querySelector('[data-planimport]').hasAttribute('accept')), 'Dateiauswahl ohne Typfilter (iOS graut .json nicht aus)');
 await ctxB.close();
 
 console.log('7. Neu laden und Offline');

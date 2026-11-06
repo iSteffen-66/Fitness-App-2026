@@ -699,3 +699,19 @@ test('Zirkel D: Beinpresse und Beinbeuger in jeder Runde, Gewicht beim ersten Sa
   assert.deepEqual(r.newTarget, { exId: 16, weight: 80 });
   assert.ok(a.steps.filter((s) => s.exId === 16).every((s) => s.weight === 80));
 });
+
+test('Plan-Datei ohne Fotos: vorhandene eigene Fotos bleiben erhalten', async () => {
+  const p = oldPlan();
+  const slim = JSON.parse(JSON.stringify(L.buildPlanExport(p, {}))); delete slim.photos;
+  const r = L.readPlanImport(slim);
+  assert.equal(r.ok, true);
+  assert.equal(r.photos, null);
+  const cur = { 1: 'data:image/jpeg;base64,A', 3: 'data:image/jpeg;base64,B' };
+  assert.deepEqual(L.mergePlanPhotos(cur, p, r.photos), cur);
+  const store = createStore(memoryAdapter());
+  await store.savePhoto(1, cur[1]); await store.savePhoto(3, cur[3]);
+  await store.replacePlan(r.plan, L.mergePlanPhotos(await store.getPhotos(), r.plan, r.photos));
+  assert.deepEqual(await store.getPhotos(), cur);
+  // Datei mit (leeren) Fotos verhält sich wie bisher: Standardbilder für Planübungen
+  assert.deepEqual(L.mergePlanPhotos(cur, p, {}), {});
+});
