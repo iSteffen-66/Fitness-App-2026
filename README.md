@@ -32,7 +32,7 @@ Dann `http://localhost:8080` öffnen. (Service Worker und Wake Lock funktioniere
 ## Tests
 
 ```
-node --test tests/logic.test.js                      # Datenlogik, 29 Tests
+node --test tests/logic.test.js                      # Datenlogik, 37 Tests
 npm start &                                          # Webserver auf Port 8080
 NODE_PATH=$(npm root -g) node tests/e2e.mjs          # Oberfläche im Handy-Viewport, offline, Export/Import, Timer
 ```
@@ -71,11 +71,18 @@ Supersätze, Zirkel und Blöcke mit „Abwechselnd“ werden als Ganzes verschob
 ## Übungen abwechselnd trainieren
 
 Plan → Block antippen → **Ablauf**:
-- **Abwechselnd (Pause nach jedem Satz):** Übung 1 Satz 1, Pause, Übung 2 Satz 1, Pause, Übung 1 Satz 2 …
-- **Supersatz:** gleiche Reihenfolge, aber Pause erst nach jeder Runde.
+- **Einzeln nacheinander** (`single`): alle Sätze einer Übung, dann die nächste.
+- **Abwechselnd** (`alternate`, Satzpaare): erst alle Aufwärmsätze der Blockübungen, dann Runde 1 (Satz 1 jeder Übung), Runde 2 (jeweils Satz 2) usw. Übungen mit weniger Sätzen fallen in späteren Runden weg, ebenso optionale Übungen, die beim Start abgewählt oder im Training ausgelassen werden.
+  - Pause innerhalb der Runde: 30 s Wechselpause.
+  - Nach dem letzten Satz einer Runde: „Pause nach der Runde“ des Blocks; ist das Feld leer, die Pause der zuletzt gemachten Übung. Nach der letzten Runde (Blockende) gibt es keine Pause, wie bei allen Blöcken.
+  - Wird die letzte Übung einer Runde ausgelassen, wird die laufende Wechselpause zur Rundenpause (gerechnet ab Ende des letzten Satzes).
+  - Anzeige: Foto, Übung, „Runde x/y“ und „Als Nächstes“ mit der folgenden Übung und Pause.
+- **Supersatz:** gleiche Reihenfolge, Pause erst nach jeder Runde (größte Übungspause).
 - **Zirkel:** alle Übungen je Runde, feste Rundenzahl, Pause nach der Runde.
 
 Welche Übungen abwechseln, legst du fest, indem du sie in denselben Block legst (Übung bearbeiten → Feld „Block“). Die Reihenfolge im Block bestimmt, welche zuerst kommt.
+
+Im Training lassen sich über „Gerät belegt?“ auch **einzelne Sätze** auslassen („Nur diesen Satz auslassen“); mit „Zurück“ kannst du einen ausgelassenen Satz doch noch erfassen.
 
 ## Plan auf mehreren Geräten nutzen
 

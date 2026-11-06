@@ -185,11 +185,15 @@ function initForm() {
   } else S.ui.form = { idx: step.index, minutes: '', note: '' };
 }
 
+function restPreview(a, step, next) {
+  const r = L.restAfter(a, step, next);
+  return r > 0 ? ` (nach ${r} s Pause)` : '';
+}
 const MODE_NAME = { single: 'Einzeln', superset: 'Supersatz', circuit: 'Zirkel', alternate: 'Abwechselnd' };
 function setLabel(step) {
   if (step.setType === 'warmup') return 'Aufwärmsatz';
   if (step.mode === 'single') return `Arbeitssatz ${step.setNo}/${step.setCount}`;
-  return step.mode === 'alternate' ? `Satz ${step.round}/${step.rounds}` : `Runde ${step.round}/${step.rounds}`;
+  return `Runde ${step.round}/${step.rounds}`;
 }
 
 function viewTraining() {
@@ -255,7 +259,7 @@ function viewTraining() {
       <button class="btn ghost" data-act="adj" data-f="weight" data-d="-${L.stepOf(ex) || 1}" aria-label="weniger">−</button>
       <input id="in-weight" inputmode="decimal" data-in="form.weight" value="${esc(f.weight)}">
       <button class="btn ghost" data-act="adj" data-f="weight" data-d="${L.stepOf(ex) || 1}" aria-label="mehr">+</button></div></div>` : ''}</div>
-    ${next ? `<p class="sm muted">Danach: ${next.type === 'timed' ? esc(next.blockName) : esc(next.name) + (next.side ? ' (' + next.side + ')' : '')}</p>` : ''}
+    ${next ? `<p class="sm muted">Als Nächstes: <b>${next.type === 'timed' ? esc(next.blockName) : esc(next.name)}</b>${next.type === 'set' ? ` · ${next.setType === 'warmup' ? 'Aufwärmsatz' : next.mode === 'single' ? `Satz ${next.setNo}/${next.setCount}` : `Runde ${next.round}/${next.rounds}`}${next.side ? ' · ' + next.side : ''}` : ''}${restPreview(a, step, next)}</p>` : ''}
     <div class="cta"><button class="btn ok" data-act="done">Erledigt</button></div>
     <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ghost" data-act="order">Gerät belegt?</button></div>
     ${openHint(a)}`;
@@ -282,7 +286,8 @@ async function orderSheet() {
     <button class="btn sm ok" data-m="go|${esc(u.key)}">Jetzt</button></div>`;
   const r = await modal(`<h3>Gerät belegt?</h3><p class="sm muted">Aktuell: <b>${esc(me ? me.label : cur.name || cur.blockName)}</b>. Nichts geht verloren: Erfasste Sätze bleiben gespeichert, offene Sätze kannst du jederzeit nachholen.</p>
     <button class="btn" data-m="later" ${next ? '' : 'disabled'}>Später machen${next ? ` (nach „${esc(next.label)}“)` : ''}</button>
-    ${cur.type === 'set' ? '<button class="btn ghost" style="margin-top:8px" data-m="skip">Auslassen (bleibt nachholbar)</button>' : ''}
+    ${cur.type === 'set' ? '<button class="btn ghost" style="margin-top:8px" data-m="skipset">Nur diesen Satz auslassen</button>' : ''}
+    ${cur.type === 'set' ? '<button class="btn ghost" style="margin-top:8px" data-m="skip">Ganze Übung auslassen (bleibt nachholbar)</button>' : ''}
     ${me && me.skippedNames.length ? `<button class="btn ghost" style="margin-top:8px" data-m="go|${esc(curKey)}">Wieder aufnehmen: ${esc(me.skippedNames.join(', '))}</button>` : ''}
     ${others.length ? `<h3 style="margin-top:16px">Stattdessen jetzt machen</h3>${others.map(btnRow).join('')}` : ''}
     <div class="row"><button class="btn ghost" data-m="x">Abbrechen</button></div>`);
@@ -290,8 +295,11 @@ async function orderSheet() {
   const now = Date.now();
   if (r.choice === 'later') { const l = L.postponeCurrent(a, now); toast(l ? `Verschoben hinter „${l}“.` : 'Keine weitere offene Übung.'); }
   else if (r.choice === 'skip') L.skipCurrent(a, now);
+  else if (r.choice === 'skipset') L.skipSet(a, now);
   else if (r.choice.startsWith('go|')) L.bringToFront(a, r.choice.slice(3), now);
-  await persistActive(); initForm(); rerender(); window.scrollTo(0, 0);
+  await persistActive();
+  if (!L.currentStep(a) && !L.openUnits(a).length) { await finishTraining(false); return; }
+  initForm(); rerender(); window.scrollTo(0, 0);
 }
 
 async function startTraining() {
@@ -539,7 +547,7 @@ function viewPlanBlock(id) {
   const b = S.plan.blocks.find((x) => x.id === id);
   if (!b) return '<a class="btn ghost" href="#/plan">‹ Plan</a><p>Block nicht gefunden.</p>';
   if (!S.ui.bd || S.ui.bd.id !== id) {
-    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: String(b.roundRest ?? 60), minutes: fmtNum(b.minutes ?? 10), note: b.note || '' };
+    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: b.roundRest === null || b.roundRest === undefined || b.roundRest === '' ? (b.mode === 'circuit' ? '60' : '') : String(b.roundRest), minutes: fmtNum(b.minutes ?? 10), note: b.note || '' };
   }
   const d = S.ui.bd;
   const opt = (v, t, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`;
@@ -551,8 +559,10 @@ function viewPlanBlock(id) {
   if (d.kind === 'timed') h += `<label class="f" for="b-min">Dauer (min)</label><input id="b-min" inputmode="decimal" data-in="bd.minutes" value="${esc(d.minutes)}">
     <label class="f" for="b-note">Hinweis</label><textarea id="b-note" data-in="bd.note">${esc(d.note)}</textarea>`;
   else {
-    h += `<label class="f" for="b-mode">Ablauf</label><select id="b-mode" data-in="bd.mode" data-rr>${opt('single', 'Einzeln nacheinander', d.mode)}${opt('alternate', 'Abwechselnd (Pause nach jedem Satz)', d.mode)}${opt('superset', 'Supersatz (abwechselnd, Pause erst nach der Runde)', d.mode)}${opt('circuit', 'Zirkel (feste Rundenzahl)', d.mode)}</select>
+    h += `<label class="f" for="b-mode">Ablauf</label><select id="b-mode" data-in="bd.mode" data-rr>${opt('single', 'Einzeln nacheinander', d.mode)}${opt('alternate', 'Abwechselnd (Satzpaare: 30 s Wechsel, Pause nach der Runde)', d.mode)}${opt('superset', 'Supersatz (abwechselnd, Pause erst nach der Runde)', d.mode)}${opt('circuit', 'Zirkel (feste Rundenzahl)', d.mode)}</select>
       <p class="sm muted">Abwechselnd und Supersatz: Übung 1 Satz 1, Übung 2 Satz 1, Übung 1 Satz 2 … Reihenfolge der Übungen im Plan festlegen. Zirkel: alle Übungen je Runde, Pause nach der Runde.</p>`;
+    if (d.mode === 'alternate') h += `<label class="f" for="b-rr">Pause nach der Runde (s)</label><input id="b-rr" inputmode="numeric" data-in="bd.roundRest" value="${esc(d.roundRest)}" placeholder="leer = Pause der letzten Übung der Runde">
+      <p class="sm muted">Ablauf: erst alle Aufwärmsätze, dann Runde 1 (Satz 1 jeder Übung), Runde 2 … Zwischen den Übungen einer Runde ${L.SWITCH_REST} s Wechselpause. Übungen mit weniger Sätzen fallen in späteren Runden weg.</p>`;
     if (d.mode === 'circuit') h += `<div class="grid2"><div><label class="f" for="b-rounds">Runden</label><input id="b-rounds" inputmode="numeric" data-in="bd.rounds" value="${esc(d.rounds)}"></div>
       <div><label class="f" for="b-rr">Pause nach Runde (s)</label><input id="b-rr" inputmode="numeric" data-in="bd.roundRest" value="${esc(d.roundRest)}"></div></div>`;
   }
@@ -787,7 +797,9 @@ const ACT = {
     if (d.kind === 'timed' && (b.items || []).length) { toast('Der Block enthält Übungen. Verschiebe oder lösche sie zuerst.'); return; }
     Object.assign(b, { name: d.name.trim(), start, end, kind: d.kind });
     if (d.kind === 'timed') Object.assign(b, { minutes: parseNum(d.minutes) ?? 1, note: d.note.trim(), mode: 'single' });
-    else Object.assign(b, { mode: d.mode, rounds: Math.max(1, parseNum(d.rounds) || 1), roundRest: parseNum(d.roundRest) ?? 60 });
+    else if (d.mode === 'alternate') {
+      Object.assign(b, { mode: d.mode, roundRest: parseNum(d.roundRest) }); // null = Pause der letzten Übung
+    } else Object.assign(b, { mode: d.mode, rounds: Math.max(1, parseNum(d.rounds) || 1), roundRest: parseNum(d.roundRest) ?? 60 });
     await savePlan(); S.ui.bd = null; nav('plan');
   },
   async delBlock() {

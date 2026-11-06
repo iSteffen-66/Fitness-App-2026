@@ -268,6 +268,80 @@ await p2.reload(); await p2.waitForSelector('#clock');
 ok(true, 'Laufendes Training überlebt Neuladen');
 await p2.close();
 
+console.log('9. Modus „alternate“: Testplan B freie Gewichte (SZ 3, Tri 3, Plank 2)');
+{
+  const { defaultPlan } = await import('../app/js/seed.js');
+  const L = await import('../app/js/logic.js');
+  const plan = defaultPlan();
+  plan.exercises[7].sets = [1, 2, 3].map(() => ({ reps: 10, weight: 5 }));
+  plan.exercises[8].sets = [1, 2, 3].map(() => ({ reps: 10, weight: 25 }));
+  plan.exercises[15] = { id: 15, name: 'Plank', device: 'Matte', tech: 'Körper gerade', photo: null, warmup: null,
+    sets: [{ reps: 1, weight: null, text: '60 s halten' }, { reps: 1, weight: null, text: '60 s halten' }],
+    unit: '', sides: 'none', rest: 45, warmRest: 30, step: null, optional: false };
+  const blk = plan.blocks.find((b) => b.id === 'b08');
+  Object.assign(blk, { name: 'B freie Gewichte', mode: 'alternate', items: [7, 8, 15], roundRest: null, start: 0, end: 10 });
+  plan.blocks = [blk];                        // nur dieser Block, damit der Test direkt einsteigt
+  const testFile = path.join(SHOTS, 'testplan-alternate.json');
+  fs.writeFileSync(testFile, JSON.stringify(L.buildPlanExport(plan, {}, Date.now())));
+
+  const cx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, acceptDownloads: true });
+  const q = await cx.newPage();
+  q.on('pageerror', (e) => errors.push(e.message));
+  await q.goto(URL_ + '#/backup'); await q.waitForSelector('[data-planimport]', { state: 'attached' });
+  await q.setInputFiles('[data-planimport]', testFile); await q.click('#modal [data-m="ok"]'); await q.waitForTimeout(300);
+  await q.evaluate(() => { location.hash = '#/plan/block/b08'; }); await q.waitForSelector('#b-mode');
+  eq(await q.locator('#b-mode').inputValue(), 'alternate', 'Plan-Editor: Modus „abwechselnd“ gewählt');
+  eq(await q.locator('#b-rr').inputValue(), '', 'Plan-Editor: Rundenpause leer (= Pause der letzten Übung)');
+  const opts = await q.locator('#b-mode option').allInnerTexts();
+  ok(opts.some((o) => /nacheinander/.test(o)) && opts.some((o) => /Abwechselnd/.test(o)), 'Plan-Editor: Auswahl nacheinander / abwechselnd');
+  await q.screenshot({ path: path.join(SHOTS, '21-editor-alternate.png') });
+
+  await q.evaluate(() => { location.hash = '#/'; }); await q.waitForSelector('[data-act="start"]');
+  await q.click('[data-act="start"]'); await q.waitForSelector('#in-reps');
+  const SHORT = { 'Scott-Curl SZ-Stange': 'SZ', 'Trizepsdrücken am Seil': 'Tri', Plank: 'Plank' };
+  const where = async () => {
+    const name = SHORT[await q.locator('h1').first().innerText()] || '?';
+    const tag = await q.locator('.tag.ac').first().innerText();
+    return tag === 'Aufwärmsatz' ? name + '-Aufw' : name + tag.replace('Runde ', '').split('/')[0];
+  };
+  const seq = []; const rests = [];
+  let reloaded = false;
+  for (let i = 0; i < 20 && q.url().includes('#/training'); i++) {
+    const w = await where();
+    seq.push(w);
+    if (w === 'SZ1') await q.screenshot({ path: path.join(SHOTS, '22-alternate-sz1.png') });
+    if (w === 'Plank2' && !reloaded) {
+      // direkt nach Tri2 neu geladen (siehe unten)
+    }
+    await q.click('[data-act="done"]'); await q.waitForTimeout(80);
+    if (!q.url().includes('#/training')) break;
+    rests.push(w + ':' + ((await q.locator('#restSec').count()) ? (await q.locator('#restSec').innerText()) : '–'));
+    if (w === 'Tri2' && !reloaded) {
+      reloaded = true;
+      await q.reload(); await q.waitForSelector('#in-reps');
+      eq(await where(), 'Plank2', 'Nach Neuladen zwischen Tri2 und Plank2: weiter bei Plank Runde 2');
+      eq(await q.locator('.tag.ac').first().innerText(), 'Runde 2/3', 'Anzeige „Runde 2/3“');
+      ok(await q.locator('.rest').count() === 1, 'Laufende Wechselpause nach Neuladen weiter sichtbar');
+      ok(/Als Nächstes: Scott-Curl SZ-Stange · Runde 3\/3/.test(await q.locator('#app').innerText()), 'Anzeige „Als Nächstes“ mit Runde');
+      await q.screenshot({ path: path.join(SHOTS, '23-nach-neuladen-plank2.png') });
+    }
+  }
+  console.log('     Ablauf:', seq.join(', '));
+  console.log('     Pausen:', rests.join(', '));
+  eq(seq.filter((x) => !x.endsWith('-Aufw')).join(','), 'SZ1,Tri1,Plank1,SZ2,Tri2,Plank2,SZ3,Tri3', 'Reihenfolge laut Testplan');
+  eq(seq.slice(0, 2).join(','), 'SZ-Aufw,Tri-Aufw', 'Erst alle Aufwärmsätze');
+  ok(rests.find((r) => r.startsWith('SZ1:')).endsWith('00:30') && rests.find((r) => r.startsWith('Plank1:')).endsWith('00:45'), 'Pausen: 30 s Wechsel, Rundenpause = Pause der letzten Übung (45 s)');
+  await q.waitForURL(/#\/history\/\w+/);
+  const sess = await q.evaluate(() => __app.S.sessions[0]);
+  eq(JSON.stringify(sess.entries.map((e) => [e.exId, e.sets.filter((x) => x.type === 'work').length])), '[[7,3],[8,3],[15,2]]', 'Protokoll: je Übung ein Eintrag mit allen Sätzen');
+  // Export → Import identisch
+  await q.evaluate(() => { location.hash = '#/backup'; }); await q.waitForSelector('[data-act="exportPlan"]');
+  const [d] = await Promise.all([q.waitForEvent('download'), q.click('[data-act="exportPlan"]')]);
+  const back = JSON.parse(fs.readFileSync(await d.path(), 'utf8'));
+  ok(JSON.stringify(back.plan) === JSON.stringify(plan), 'Export → Import → Export: Plan identisch (Byte-Vergleich)');
+  await cx.close();
+}
+
 ok(errors.length === 0, 'keine Konsolenfehler' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 await browser.close();
 console.log(`\n${checks - fails}/${checks} Prüfungen bestanden. Screenshots: ${SHOTS}`);

@@ -352,20 +352,6 @@ test('Plan übertragen: Verlauf bleibt beim Plan-Import erhalten', async () => {
   assert.deepEqual(await store.getMeta(), { lastExport: 123 });
 });
 
-test('Abwechselnd: Sätze alternieren, Pause nach jedem Satz', () => {
-  const p = defaultPlan();
-  const b = p.blocks.find((x) => x.id === 'b08'); // Scott-Curl + Trizeps
-  b.mode = 'alternate';
-  p.exercises[7].sets = [{ reps: 10, weight: 5 }, { reps: 10, weight: 5 }];
-  const st = L.buildSteps(p).filter((s) => s.blockId === 'b08');
-  assert.deepEqual(st.map((s) => `${s.exId}${s.setType === 'warmup' ? 'w' : ''}`), ['7w', '8w', '7', '8', '7', '8']);
-  assert.deepEqual(st.map((s) => s.rest), [30, 30, 60, 60, 60, 0]);
-  assert.ok(st.filter((s) => s.setType === 'work').every((s) => s.reps === 10));
-  // Supersatz zum Vergleich: Pause nur nach der Runde
-  b.mode = 'superset';
-  assert.deepEqual(L.buildSteps(p).filter((s) => s.blockId === 'b08').map((s) => s.rest), [0, 30, 0, 60, 0, 0]);
-});
-
 const doCur = (a, t = T0) => { const s = L.currentStep(a); return L.completeStep(a, s.type === 'timed' ? { actualSec: 60 } : { reps: s.reps, weight: s.weight ?? 20 }, t); };
 const curEx = (a) => L.currentStep(a)?.exId;
 
@@ -438,4 +424,149 @@ test('Laufendes Training aus älterer Version: erledigter Zeitblock bleibt erled
   L.completeStep(a, { actualSec: 600 }, T0);
   delete a.session.entries[0].stepIndex; // Stand vor diesem Update
   assert.ok(!L.openUnits(a).some((u) => u.key === 'b:b01'));
+});
+
+// ---------- Modus „alternate“ (Satzpaare) ----------
+/** Testplan laut Auftrag: Block „B freie Gewichte“ = SZ-Stange (3), Trizepsdrücken (3), Plank (2). */
+function altPlan(roundRest = null) {
+  const p = defaultPlan();
+  p.exercises[7].sets = [1, 2, 3].map(() => ({ reps: 10, weight: 5 }));
+  p.exercises[8].sets = [1, 2, 3].map(() => ({ reps: 10, weight: 25 }));
+  p.exercises[15] = { id: 15, name: 'Plank', device: 'Matte', tech: '', photo: null, warmup: null,
+    sets: [{ reps: 1, weight: null, text: '60 s halten' }, { reps: 1, weight: null, text: '60 s halten' }],
+    unit: '', sides: 'none', rest: 45, warmRest: 30, step: null, optional: false };
+  const b = p.blocks.find((x) => x.id === 'b08');
+  Object.assign(b, { name: 'B freie Gewichte', mode: 'alternate', items: [7, 8, 15], roundRest });
+  return p;
+}
+const NAME = { 7: 'SZ', 8: 'Tri', 15: 'Plank' };
+const workSeq = (steps) => steps.filter((s) => s.blockId === 'b08' && s.setType === 'work').map((s) => NAME[s.exId] + s.round);
+
+test('alternate: Reihenfolge SZ1, Tri1, Plank1, SZ2, Tri2, Plank2, SZ3, Tri3', () => {
+  const st = L.buildSteps(altPlan());
+  assert.deepEqual(workSeq(st), ['SZ1', 'Tri1', 'Plank1', 'SZ2', 'Tri2', 'Plank2', 'SZ3', 'Tri3']);
+  // erst alle Aufwärmsätze (Plank hat keinen), dann die Runden
+  const blk = st.filter((s) => s.blockId === 'b08');
+  assert.deepEqual(blk.slice(0, 2).map((s) => s.setType + NAME[s.exId]), ['warmupSZ', 'warmupTri']);
+  assert.deepEqual(blk.filter((s) => s.setType === 'work').map((s) => `${s.round}/${s.rounds}`), ['1/3', '1/3', '1/3', '2/3', '2/3', '2/3', '3/3', '3/3']);
+});
+
+/** Ein Training bis zum Ende des Blocks durchlaufen und die Pause nach jedem Arbeitssatz notieren. */
+function runBlock(plan, act = () => null) {
+  const a = L.newActive(plan, T0);
+  const log = [];
+  let t = T0;
+  while (L.currentStep(a)) {
+    const s = L.currentStep(a);
+    if (act(a, s, log, t) === 'handled') continue;
+    L.completeStep(a, s.type === 'timed' ? { actualSec: 60 } : { reps: s.reps, weight: s.weight ?? 20 }, t);
+    if (s.blockId === 'b08' && s.setType === 'work') log.push(`${NAME[s.exId]}${s.round}:${a.rest ? a.rest.total : 0}`);
+    t += 1000;
+  }
+  return { a, log };
+}
+
+test('alternate: 30 s Wechsel, Rundenpause aus Block (oder Pause der letzten Übung), am Blockende keine', () => {
+  assert.deepEqual(runBlock(altPlan(90)).log, ['SZ1:30', 'Tri1:30', 'Plank1:90', 'SZ2:30', 'Tri2:30', 'Plank2:90', 'SZ3:30', 'Tri3:0']);
+  // roundRest leer → Pause der zuletzt gemachten Übung: Plank 45 s, in Runde 3 Blockende
+  assert.deepEqual(runBlock(altPlan(null)).log, ['SZ1:30', 'Tri1:30', 'Plank1:45', 'SZ2:30', 'Tri2:30', 'Plank2:45', 'SZ3:30', 'Tri3:0']);
+  assert.equal(runBlock(altPlan('')).log[2], 'Plank1:45');
+});
+
+test('alternate: optionale/ausgelassene Übung fällt weg, Rundenpause wandert mit', () => {
+  // Plank optional und beim Start abgewählt
+  const p = altPlan(null); p.exercises[15].optional = true;
+  assert.deepEqual(workSeq(L.buildSteps(p, { skipOptional: true })), ['SZ1', 'Tri1', 'SZ2', 'Tri2', 'SZ3', 'Tri3']);
+  // Plank während des Trainings ausgelassen: Tri ist jetzt die zuletzt gemachte Übung → deren Pause (60 s)
+  // Auslassen 10 s nach Tri1: laufende 30-s-Wechselpause wird zur Rundenpause (Tri: 60 s) ab Satzende
+  const { a, log } = runBlock(altPlan(null), (x, s, lg, t) => {
+    if (s.exId === 15) {
+      L.skipCurrent(x, t + 9000);
+      lg[lg.length - 1] = lg[lg.length - 1].replace(/:\d+$/, ':' + (x.rest ? x.rest.total : 0));
+      if (x.rest) assert.equal(L.remainingSec(x.rest.endAt, t + 9000), 50);
+      return 'handled';
+    }
+    return null;
+  });
+  assert.deepEqual(log, ['SZ1:30', 'Tri1:60', 'SZ2:30', 'Tri2:60', 'SZ3:30', 'Tri3:0']);
+  assert.deepEqual(L.openUnits(a).map((u) => u.skippedNames), [['Plank']]); // nachholbar
+});
+
+test('alternate: einzelnen Satz auslassen, Rest läuft weiter; Zurück holt ihn nach', () => {
+  const { a, log } = runBlock(altPlan(null), (x, s) => {
+    if (s.exId === 7 && s.round === 2 && s.setType === 'work' && !(x.skippedSteps || []).includes(s.index)) { L.skipSet(x, T0); return 'handled'; }
+    return null;
+  });
+  assert.deepEqual(log, ['SZ1:30', 'Tri1:30', 'Plank1:45', 'Tri2:30', 'Plank2:45', 'SZ3:30', 'Tri3:0']);
+  // Nach Plank1 läuft 45 s Rundenpause; SZ2 auslassen → Pause bleibt 45 s (nächster Satz Tri2 ist 2. Runde)
+  const c = L.newActive(altPlan(null), T0);
+  while (!(L.currentStep(c).exId === 15 && L.currentStep(c).round === 1)) doCur(c);
+  doCur(c, T0 + 1000);
+  L.skipSet(c, T0 + 5000);
+  assert.equal(c.rest.total, 45);
+  assert.equal(L.remainingSec(c.rest.endAt, T0 + 5000), 41);
+  const sz = a.session.entries.find((e) => e.exId === 7);
+  assert.equal(sz.sets.filter((x) => x.type === 'work').length, 2);
+  assert.equal(L.openUnits(a).length, 0); // bewusst ausgelassener Satz gilt nicht als offen
+  // Satz nachträglich doch machen: Zurück bis zum ausgelassenen Satz
+  const b = L.newActive(altPlan(null), T0);
+  while (!(L.currentStep(b).exId === 7 && L.currentStep(b).round === 2)) doCur(b);
+  L.skipSet(b, T0);
+  assert.equal(NAME[L.currentStep(b).exId] + L.currentStep(b).round, 'Tri2');
+  L.goBack(b, T0);
+  assert.equal(NAME[L.currentStep(b).exId] + L.currentStep(b).round, 'SZ2');
+  doCur(b);
+  assert.ok(!b.skippedSteps.includes(b.steps.find((x) => x.exId === 7 && x.round === 2).index));
+});
+
+test('alternate: Fortsetzen nach Neuladen zwischen Tri2 und Plank2', () => {
+  const plan = altPlan(null);
+  let a = L.newActive(plan, T0);
+  while (!(L.currentStep(a).exId === 8 && L.currentStep(a).round === 2 && L.currentStep(a).setType === 'work')) doCur(a);
+  doCur(a, T0 + 1000);                           // Tri2 erledigt → 30 s Wechselpause läuft
+  a = JSON.parse(JSON.stringify(a));            // wie gespeichert/geladen (IndexedDB)
+  assert.equal(NAME[L.currentStep(a).exId] + L.currentStep(a).round, 'Plank2');
+  assert.equal(L.remainingSec(a.rest.endAt, T0 + 11_000), 20);
+  const rest = [];
+  while (L.currentStep(a) && L.currentStep(a).blockId === 'b08') { const s = L.currentStep(a); rest.push(NAME[s.exId] + s.round); doCur(a); }
+  assert.deepEqual(rest, ['Plank2', 'SZ3', 'Tri3']);
+});
+
+test('alternate: Protokoll im bisherigen Format (je Übung ein Eintrag mit sets[])', () => {
+  const { a } = runBlock(altPlan(null));
+  const s = L.finalizeSession(a, T0 + 5e6, false);
+  const e = s.entries.filter((x) => [7, 8, 15].includes(x.exId));
+  assert.deepEqual(e.map((x) => [x.exId, x.kind, x.sets.filter((y) => y.type === 'work').length]), [[7, 'sets', 3], [8, 'sets', 3], [15, 'sets', 2]]);
+  assert.deepEqual(Object.keys(e[0].sets[1]).sort(), ['at', 'reps', 'side', 'stepIndex', 'targetReps', 'targetWeight', 'type', 'weight']);
+  assert.ok(L.toCSV([s]).includes('Plank'));
+});
+
+test('alternate: Export → Import ergibt identischen Plan (Plan-Datei und Sicherung)', async () => {
+  const plan = altPlan(null);
+  const r = L.readPlanImport(JSON.parse(JSON.stringify(L.buildPlanExport(plan, {}))));
+  assert.deepEqual(r.plan, plan);
+  const store = createStore(memoryAdapter());
+  const dump = JSON.parse(JSON.stringify(L.buildExport(plan, [], {})));
+  assert.equal(L.validateImport(dump).ok, true);
+  await store.replaceAll(dump);
+  assert.deepEqual(await store.getPlan(), plan);
+  assert.equal((await store.getPlan()).blocks.find((b) => b.id === 'b08').mode, 'alternate');
+});
+
+test('Alte Modi (single/superset/circuit) verhalten sich exakt wie vor der Änderung', () => {
+  const ref = JSON.parse(fs.readFileSync(new URL('./fixtures/steps-vorher.json', import.meta.url), 'utf8'));
+  const p = defaultPlan();
+  assert.deepEqual(JSON.parse(JSON.stringify(L.buildSteps(p))), ref.steps);
+  assert.deepEqual(JSON.parse(JSON.stringify(L.buildSteps(p, { skipOptional: true }))), ref.optOff);
+  const a = L.newActive(p, T0); const rests = []; let t = T0;
+  while (L.currentStep(a)) { const s = L.currentStep(a); L.completeStep(a, s.type === 'timed' ? { actualSec: 60 } : { reps: s.reps, weight: s.weight ?? 20 }, t); rests.push(a.rest ? a.rest.total : 0); t += 1000; }
+  assert.deepEqual(rests, ref.rests);
+});
+
+test('Alte Modi: Auslassen beendet die laufende Pause wie bisher', () => {
+  const a = L.newActive(defaultPlan(), T0);
+  doCur(a); doCur(a, T0);                       // Cardio, Aufwärmsatz Bankdrücken → 30 s Pause
+  assert.equal(a.rest.total, 30);
+  L.skipCurrent(a, T0 + 1000);
+  assert.equal(a.rest, null);
 });

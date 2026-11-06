@@ -12,6 +12,9 @@ export function defaultStep(unit) {
 }
 export function stepOf(ex) { return ex.step > 0 ? ex.step : defaultStep(ex.unit); }
 
+/** Wechselpause zwischen den Übungen einer Runde im Modus „Abwechselnd“ (Sekunden). */
+export const SWITCH_REST = 30;
+
 export function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
 // ---------- Zahlen / Zeit ----------
@@ -121,19 +124,22 @@ export function buildSteps(plan, opts = {}) {
       }
     } else {
       const warm = exs.filter((e) => e.warmup);
-      const each = mode === 'alternate'; // Abwechselnd: Pause nach jedem Satz
+      const alt = mode === 'alternate'; // Abwechselnd (Satzpaare): 30 s Wechsel, Pause nach der Runde
+      const rrBlock = block.roundRest === '' || block.roundRest === undefined || block.roundRest === null ? null : Number(block.roundRest);
       warm.forEach((ex, i) => steps.push(...makeSetSteps(block, ex, 'warmup', ex.warmup,
         { setNo: 0, setCount: 0, groupPos: i, groupSize: warm.length },
-        each ? (ex.warmRest ?? 30) : i === warm.length - 1 ? Math.max(...warm.map((e) => e.warmRest ?? 30)) : 0)));
+        alt ? (ex.warmRest ?? 30) : i === warm.length - 1 ? Math.max(...warm.map((e) => e.warmRest ?? 30)) : 0)));
       const rounds = mode === 'circuit' ? Math.max(1, Number(block.rounds) || 1) : Math.max(...exs.map((e) => e.sets.length));
       for (let r = 0; r < rounds; r++) {
         const part = exs.filter((e) => mode === 'circuit' || r < e.sets.length);
         const roundRest = mode === 'circuit' ? (Number(block.roundRest) || 0) : Math.max(...part.map((e) => e.rest ?? 60));
         part.forEach((ex, i) => {
           const s = ex.sets[Math.min(r, ex.sets.length - 1)];
+          const last = i === part.length - 1;
+          const extra = alt ? { switchRest: SWITCH_REST, roundRest: rrBlock ?? (ex.rest ?? 60) } : {};
           steps.push(...makeSetSteps(block, ex, 'work', s,
-            { setNo: r + 1, setCount: rounds, round: r + 1, rounds, groupPos: i, groupSize: part.length },
-            each ? (ex.rest ?? 60) : i === part.length - 1 ? roundRest : 0));
+            { setNo: r + 1, setCount: rounds, round: r + 1, rounds, groupPos: i, groupSize: part.length, ...extra },
+            alt ? (last ? extra.roundRest : SWITCH_REST) : last ? roundRest : 0));
         });
       }
     }
@@ -176,9 +182,29 @@ export function enterStep(a, now) {
     ? { startedAt: now, endAt: now + s.seconds * 1000, total: s.seconds, notified: false }
     : null;
 }
-function isSkipped(a, i) { const s = a.steps[i]; return s && s.type === 'set' && a.skipped.includes(s.exId); }
+function isSkipped(a, i) {
+  const s = a.steps[i];
+  return !!s && ((s.type === 'set' && a.skipped.includes(s.exId)) || (a.skippedSteps || []).includes(s.index));
+}
 function nextIndex(a, from) { let i = from + 1; while (i < a.steps.length && isSkipped(a, i)) i++; return i; }
-function prevIndex(a, from) { let i = from - 1; while (i >= 0 && isSkipped(a, i)) i--; return i; }
+function prevIndex(a, from) {
+  // Zurück führt auch zu einzeln ausgelassenen Sätzen (zum Nachholen), nicht zu ausgelassenen Übungen.
+  let i = from - 1;
+  while (i >= 0 && a.steps[i].type === 'set' && a.skipped.includes(a.steps[i].exId)) i--;
+  return i;
+}
+/**
+ * Pause nach einem Satz. Im Modus „Abwechselnd“ zur Laufzeit bestimmt, damit sie auch bei
+ * ausgelassenen Übungen/Sätzen stimmt: 30 s, solange in derselben Runde noch ein Satz folgt,
+ * sonst Rundenpause; am Blockende keine Pause.
+ */
+export function restAfter(a, step, next) {
+  if (step.mode !== 'alternate' || step.type !== 'set' || step.setType !== 'work') return step.rest;
+  if (step.side === 'links') return 0;
+  if (!next || next.blockId !== step.blockId) return 0;
+  if (next.type === 'set' && next.setType === 'work' && next.round === step.round) return step.switchRest ?? SWITCH_REST;
+  return step.roundRest ?? step.rest;
+}
 
 /** Hinter Plan? Gibt Minuten zurück (0 = im Plan). */
 export function behindMinutes(a, now) {
@@ -233,19 +259,43 @@ export function completeStep(a, values, now) {
     const ti = a.session.entries.findIndex((e) => e.kind === 'timed' && e.stepIndex === step.index);
     if (ti >= 0) a.session.entries[ti] = te; else a.session.entries.push(te);
   }
+  if (a.skippedSteps) a.skippedSteps = a.skippedSteps.filter((i) => i !== step.index);
   const next = nextIndex(a, a.stepIndex);
-  a.rest = step.rest > 0 && next < a.steps.length
-    ? { endAt: now + step.rest * 1000, total: step.rest, notified: false } : null;
+  const rest = next < a.steps.length ? restAfter(a, step, a.steps[next]) : 0;
+  a.rest = rest > 0 ? { endAt: now + rest * 1000, total: rest, notified: false, after: step.index } : null;
   a.stepIndex = next;
   if (next < a.steps.length) enterStep(a, now); else a.timer = null;
   return { finished: next >= a.steps.length, newTarget };
+}
+/**
+ * Nach dem Auslassen läuft die bereits gestartete Pause weiter, aber passend zum neuen
+ * nächsten Satz (z. B. Rundenpause statt Wechselpause, wenn die letzte Übung der Runde wegfällt).
+ */
+function retimeRest(a, now) {
+  const r = a.rest;
+  if (!r || r.after === undefined) { a.rest = null; return; }
+  const prev = a.steps.find((x) => x.index === r.after);
+  if (!prev || prev.mode !== 'alternate') { a.rest = null; return; } // alte Modi: Pause endet wie bisher
+  const cur = currentStep(a);
+  const total = prev && cur ? restAfter(a, prev, cur) : 0;
+  const endAt = r.endAt - r.total * 1000 + total * 1000;
+  a.rest = total > 0 && endAt > now ? { ...r, endAt, total } : null;
 }
 export function skipCurrent(a, now) {
   const s = currentStep(a);
   if (!s) return;
   if (s.type === 'set') a.skipped.push(s.exId);
-  a.rest = null;
   a.stepIndex = nextIndex(a, a.stepIndex);
+  retimeRest(a, now);
+  enterStep(a, now);
+}
+/** Nur diesen einen Satz auslassen; die Übung läuft danach normal weiter. */
+export function skipSet(a, now) {
+  const s = currentStep(a);
+  if (!s || s.type !== 'set') return;
+  a.skippedSteps = [...(a.skippedSteps || []), s.index];
+  a.stepIndex = nextIndex(a, a.stepIndex);
+  retimeRest(a, now);
   enterStep(a, now);
 }
 export function goBack(a, now) {
@@ -261,6 +311,7 @@ export function unitKey(s) {
   return `e:${s.blockId}:${s.exId}`;
 }
 export function isStepDone(a, s) {
+  if ((a.skippedSteps || []).includes(s.index)) return true; // bewusst ausgelassener Einzelsatz
   if (s.type === 'set') return !!findRecorded(a, s);
   // Einträge aus älteren Versionen haben keinen stepIndex: über den Blocknamen zuordnen
   return a.session.entries.some((e) => e.kind === 'timed' && (e.stepIndex === s.index || (e.stepIndex === undefined && e.blockName === s.blockName)));
