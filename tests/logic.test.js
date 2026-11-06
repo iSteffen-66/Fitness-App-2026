@@ -576,13 +576,13 @@ test('Alte Modi: Auslassen beendet die laufende Pause wie bisher', () => {
 });
 
 // ---------- Wechselzeit zwischen Blöcken und neuer Ausgangsplan ----------
-test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining mit Beinpresse/Beinbeuger, freie Gewichte, Plank; 9 und 10 entfallen', () => {
+test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining, freie Gewichte, Plank, Zirkel D mit Beinpresse/Beinbeuger; 9 und 10 entfallen', () => {
   const p = defaultPlan();
   const by = Object.fromEntries(p.blocks.map((b) => [b.name, b]));
   assert.deepEqual(p.blocks.map((b) => b.name), ['Cardio Aufwärmen', 'A Roter Käfig', 'B Zirkeltraining', 'C Freie Gewichte', 'C Plank', 'D Zirkel', 'Puffer', 'Ausklang']);
   assert.deepEqual(by['A Roter Käfig'].items, [1, 2, 3, 14]);
   assert.equal(by['A Roter Käfig'].switchRest, 30);
-  assert.deepEqual(by['B Zirkeltraining'].items, [4, 5, 6, 16, 17, 11]);
+  assert.deepEqual(by['B Zirkeltraining'].items, [4, 5, 6, 11]);
   assert.equal(p.exercises[16].name, 'Beinpresse');
   assert.equal(p.exercises[17].name, 'Beinbeuger');
   assert.ok([16, 17].every((id) => p.exercises[id].sets.length === 2 && p.exercises[id].sets.every((x) => x.reps === 10 && x.weight === null)));
@@ -590,7 +590,7 @@ test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining mit Beinpresse/Beinbeuger
   assert.deepEqual(by['C Freie Gewichte'].items, [7, 8]);
   assert.equal(by['C Freie Gewichte'].mode, 'alternate');
   assert.deepEqual(by['C Plank'].items, [15]);
-  assert.deepEqual(by['D Zirkel'].items, [13, 12]);
+  assert.deepEqual(by['D Zirkel'].items, [13, 16, 17, 12]);
   assert.ok(!p.exercises[9] && !p.exercises[10]);
   assert.ok(!p.blocks.some((b) => (b.items || []).some((i) => i === 9 || i === 10)));
   // jede Übung genau einmal im Plan
@@ -689,9 +689,9 @@ test('Zeiten lückenlos berücksichtigt Wechselzeiten', () => {
   assert.equal(L.planTotalMinutes(p), 75);
 });
 
-test('Zirkeltraining: Beinpresse und Beinbeuger in jeder Runde, Gewicht beim ersten Satz wird Soll', () => {
-  const st = L.buildSteps(defaultPlan()).filter((s) => s.blockId === 'b06' && s.setType === 'work');
-  assert.deepEqual(st.map((s) => `${s.exId}/${s.round}`), ['4/1', '5/1', '6/1', '16/1', '17/1', '11/1', '4/2', '5/2', '6/2', '16/2', '17/2', '11/2']);
+test('Zirkel D: Beinpresse und Beinbeuger in jeder Runde, Gewicht beim ersten Satz wird Soll', () => {
+  const st = L.buildSteps(defaultPlan()).filter((s) => s.blockId === 'b10' && s.setType === 'work');
+  assert.deepEqual(st.map((s) => `${s.exId}/${s.round}`), ['13/1', '16/1', '17/1', '12/1', '13/2', '16/2', '17/2', '12/2']);
   const a = L.newActive(defaultPlan(), T0);
   while (L.currentStep(a).exId !== 16) doCur(a);
   assert.equal(L.currentStep(a).weight, null);
