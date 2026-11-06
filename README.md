@@ -32,7 +32,7 @@ Dann `http://localhost:8080` öffnen. (Service Worker und Wake Lock funktioniere
 ## Tests
 
 ```
-node --test tests/logic.test.js                      # Datenlogik, 37 Tests
+node --test tests/logic.test.js                      # Datenlogik, 42 Tests
 npm start &                                          # Webserver auf Port 8080
 NODE_PATH=$(npm root -g) node tests/e2e.mjs          # Oberfläche im Handy-Viewport, offline, Export/Import, Timer
 ```
@@ -67,6 +67,16 @@ Im Training öffnet **„Gerät belegt?“** (bei Cardio: „Später / andere Ü
 - **Auslassen:** Die Übung wird übersprungen, bleibt aber offen und lässt sich jederzeit über dieselbe Auswahl nachholen. Am Ende fragt die App nach noch offenen Übungen.
 
 Supersätze, Zirkel und Blöcke mit „Abwechselnd“ werden als Ganzes verschoben, damit das Abwechseln erhalten bleibt. Bereits erfasste Sätze bleiben gespeichert, verschoben werden nur offene Sätze.
+
+## Wechselzeit zwischen Blöcken
+
+Zwischen zwei Blöcken läuft automatisch eine **Wechselzeit von 1 Minute** (Anzeige „Wechselzeit → nächster Block“), z. B. für den Weg in einen anderen Bereich des Studios.
+- Standard für den ganzen Plan: Plan → „Wechselzeit zwischen Blöcken (s)“.
+- Je Block abweichend: Block antippen → „Wechselzeit danach (s)“ (leer = Standard, 0 = direkt weiter).
+- Die Zeitfenster der Blöcke enthalten die Wechselzeiten. Nach Änderungen „Zeiten lückenlos“ tippen.
+- Pläne ohne eigene Angabe (z. B. ältere Sicherungen) nutzen ebenfalls 1 Minute.
+
+Ausgangsplan: Block „C Freie Gewichte“ wechselt Scott-Curl (SZ-Stange) und Trizepsdrücken am Seil ab (je 2 × 10), danach folgt der Block „C Plank“ (2 × 60 s halten). Gesamtdauer mit Wechselzeiten: 90 Minuten.
 
 ## Übungen abwechselnd trainieren
 

@@ -14,6 +14,15 @@ export function stepOf(ex) { return ex.step > 0 ? ex.step : defaultStep(ex.unit)
 
 /** Wechselpause zwischen den Übungen einer Runde im Modus „Abwechselnd“ (Sekunden). */
 export const SWITCH_REST = 30;
+/** Standard-Wechselzeit zwischen zwei Blöcken (Sekunden), z. B. Weg in einen anderen Bereich. */
+export const DEFAULT_BLOCK_CHANGE = 60;
+const isBlank = (v) => v === null || v === undefined || v === '';
+/** Wechselzeit nach einem Block: eigener Wert des Blocks, sonst Standard des Plans, sonst 60 s. */
+export function blockChangeOf(plan, block) {
+  if (!isBlank(block.changeAfter)) return Math.max(0, Number(block.changeAfter) || 0);
+  if (!isBlank(plan.blockChange)) return Math.max(0, Number(plan.blockChange) || 0);
+  return DEFAULT_BLOCK_CHANGE;
+}
 
 export function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -44,12 +53,15 @@ export function planTotalMinutes(plan) {
 export function fmtWindow(b) { return `${fmtNum(b.start)}–${fmtNum(b.end)} min`; }
 
 /** Zeitfenster lückenlos hintereinander legen; Dauer je Block bleibt erhalten. */
+/** Zeitfenster lückenlos hintereinander legen, inkl. Wechselzeit zwischen den Blöcken; Dauer je Block bleibt. */
 export function realignTimes(plan) {
   let t = 0;
-  for (const b of plan.blocks) {
+  plan.blocks.forEach((b, i) => {
     const d = Math.max(0, (Number(b.end) || 0) - (Number(b.start) || 0));
-    b.start = t; b.end = t + d; t += d;
-  }
+    b.start = t; b.end = Math.round((t + d) * 100) / 100;
+    t = b.end + (i < plan.blocks.length - 1 ? blockChangeOf(plan, b) / 60 : 0);
+    t = Math.round(t * 100) / 100;
+  });
   return plan;
 }
 export function moveInArray(arr, from, to) {
@@ -106,10 +118,11 @@ export function buildSteps(plan, opts = {}) {
   const steps = [];
   for (const block of plan.blocks) {
     const start = steps.length;
+    const changeAfter = blockChangeOf(plan, block);
     if (block.kind === 'timed') {
       steps.push({
         type: 'timed', blockId: block.id, blockName: block.name,
-        seconds: Math.round((Number(block.minutes) || 0) * 60), note: block.note || '', rest: 0,
+        seconds: Math.round((Number(block.minutes) || 0) * 60), note: block.note || '', rest: 0, changeAfter,
       });
       continue;
     }
@@ -143,7 +156,8 @@ export function buildSteps(plan, opts = {}) {
         });
       }
     }
-    if (steps.length > start) steps[steps.length - 1].rest = 0; // Blockwechsel ohne Pausentimer
+    if (steps.length > start) steps[steps.length - 1].rest = 0; // innerhalb des Blocks keine Pause mehr
+    for (let i = start; i < steps.length; i++) steps[i].changeAfter = changeAfter; // Wechselzeit zum nächsten Block
   }
   steps.forEach((s, i) => { s.index = i; });
   return steps;
@@ -199,9 +213,11 @@ function prevIndex(a, from) {
  * sonst Rundenpause; am Blockende keine Pause.
  */
 export function restAfter(a, step, next) {
+  if (!next) return 0;
+  // Nächster Schritt in einem anderen Block: Wechselzeit (Pläne ohne Angabe: 60 s)
+  if (next.blockId !== step.blockId) return step.changeAfter ?? DEFAULT_BLOCK_CHANGE;
   if (step.mode !== 'alternate' || step.type !== 'set' || step.setType !== 'work') return step.rest;
   if (step.side === 'links') return 0;
-  if (!next || next.blockId !== step.blockId) return 0;
   if (next.type === 'set' && next.setType === 'work' && next.round === step.round) return step.switchRest ?? SWITCH_REST;
   return step.roundRest ?? step.rest;
 }
@@ -262,7 +278,9 @@ export function completeStep(a, values, now) {
   if (a.skippedSteps) a.skippedSteps = a.skippedSteps.filter((i) => i !== step.index);
   const next = nextIndex(a, a.stepIndex);
   const rest = next < a.steps.length ? restAfter(a, step, a.steps[next]) : 0;
-  a.rest = rest > 0 ? { endAt: now + rest * 1000, total: rest, notified: false, after: step.index } : null;
+  const nx = a.steps[next];
+  const change = !!nx && nx.blockId !== step.blockId;
+  a.rest = rest > 0 ? { endAt: now + rest * 1000, total: rest, notified: false, after: step.index, change, toBlock: change ? nx.blockName : null } : null;
   a.stepIndex = next;
   if (next < a.steps.length) enterStep(a, now); else a.timer = null;
   return { finished: next >= a.steps.length, newTarget };
@@ -274,6 +292,7 @@ export function completeStep(a, values, now) {
 function retimeRest(a, now) {
   const r = a.rest;
   if (!r || r.after === undefined) { a.rest = null; return; }
+  if (r.change) return; // Wechselzeit (Weg zum nächsten Bereich) läuft weiter
   const prev = a.steps.find((x) => x.index === r.after);
   if (!prev || prev.mode !== 'alternate') { a.rest = null; return; } // alte Modi: Pause endet wie bisher
   const cur = currentStep(a);

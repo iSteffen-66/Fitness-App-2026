@@ -1,4 +1,6 @@
-// Ausgangsplan (75 Minuten), siehe PROMPT.md. Übungsnummer = feste ID (gehört zum Foto).
+// Ausgangsplan nach PROMPT.md, ergänzt um 1 min Wechselzeit zwischen den Blöcken. Übungsnummer = feste ID (gehört zum Foto).
+import { realignTimes } from './logic.js';
+
 export const PLAN_VERSION = 1;
 
 const ex = (id, name, device, tech, o) => ({
@@ -32,7 +34,7 @@ export function defaultPlan() {
       { warmup: { reps: 10, weight: 20 }, sets: sets(2, 10, 30) }),
     ex(7, 'Scott-Curl SZ-Stange', 'Scott-Bank mit SZ-Stange', 'Oberarme ganz aufs Polster, langsam ablassen',
       { unit: 'kg je Seite', warmup: { reps: 15, weight: 0, text: '5 × unten bis Mitte, 5 × Mitte bis oben, 5 × voll, ohne Scheiben' },
-        sets: [{ reps: 10, weight: 5 }, { reps: 5, weight: 5 }] }),
+        sets: sets(2, 10, 5) }),
     ex(8, 'Trizepsdrücken am Seil', 'Kabelturm mit Seilgriff', 'Ellbogen am Körper, Seil bis unter die Hüfte',
       { warmup: { reps: 10, weight: 10 }, sets: sets(2, 10, 25) }),
     ex(9, 'Kabel einarmig (Bizeps-Curl)', 'Kabelturm mit Einzelgriff', 'Ellbogen fixiert, ohne Schwung',
@@ -47,6 +49,8 @@ export function defaultPlan() {
       { warmup: { reps: 10, weight: 20 }, sets: sets(2, 10, 40) }),
     ex(14, 'Bauch schräg (Winkel links/rechts verstellbar)', 'Bauchmaschine schräg', 'Becken fixiert, Drehung aus dem Rumpf, Winkel je Seite umstellen',
       { sides: 'Seite', sets: sets(2, 10, null) }),
+    ex(15, 'Plank', 'Matte / Boden', 'Körper gerade, Bauch und Po fest, nicht durchhängen',
+      { unit: '', noPhoto: true, rest: 45, sets: [{ reps: 1, weight: null, text: '60 s halten' }, { reps: 1, weight: null, text: '60 s halten' }] }),
   ].forEach((e) => { exercises[e.id] = e; });
 
   const B = (id, name, start, end, o) => ({ id, name, start, end, kind: 'sets', mode: 'single', items: [], ...o });
@@ -58,11 +62,14 @@ export function defaultPlan() {
     B('b05', 'A Ziehen', 26, 31, { items: [3] }),
     B('b06', 'B Supersatz', 31, 38, { mode: 'superset', items: [5, 6] }),
     B('b07', 'B Brust (optional)', 38, 42, { items: [10] }),
-    B('b08', 'C Supersatz', 42, 50, { mode: 'superset', items: [7, 8] }),
+    // Freie Gewichte: Stange und Seilzug abwechselnd, Plank als eigener Block direkt dahinter
+    B('b08', 'C Freie Gewichte', 42, 50, { mode: 'alternate', items: [7, 8], roundRest: null }),
+    B('b08p', 'C Plank', 50, 53, { items: [15] }),
     B('b09', 'C Bizeps', 50, 54, { items: [9] }),
     B('b10', 'D Zirkel', 54, 64, { mode: 'circuit', rounds: 2, roundRest: 60, items: [13, 11, 14, 12] }),
     B('b11', 'Puffer', 64, 65, { kind: 'timed', minutes: 1, note: 'Wechselzeit, Trinken' }),
     B('b12', 'Ausklang', 65, 75, { kind: 'timed', minutes: 10, note: 'Cardio locker, danach Brust, Schulter und Waden dehnen' }),
   ];
-  return { version: PLAN_VERSION, blocks, exercises };
+  // Zeitfenster inkl. Wechselzeiten (1 min zwischen den Blöcken) lückenlos berechnen
+  return realignTimes({ version: PLAN_VERSION, blockChange: 60, blocks, exercises });
 }

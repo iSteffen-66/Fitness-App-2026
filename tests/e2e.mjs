@@ -97,7 +97,10 @@ eq(await page.evaluate(() => __app.S.sessions.length), 1, 'ganzes Training gelö
 
 console.log('4. Plan-Editor');
 await go('plan'); await hscroll('Plan'); await shot('12-plan');
-eq(await page.locator('[data-sort="blocks"] > .block').count(), 12, '12 Blöcke');
+eq(await page.locator('#p-chg').inputValue(), '60', 'Plan: Wechselzeit zwischen Blöcken 60 s');
+ok((await page.locator('text=↓ danach 1 min Wechselzeit').count()) === 12, 'Plan: 12 Übergänge mit 1 min Wechselzeit angezeigt');
+ok(/C Freie Gewichte[\s\S]*C Plank[\s\S]*C Bizeps/.test(await page.locator('[data-sort="blocks"]').innerText()), 'Plan: Freie Gewichte, dann Plank, dann Bizeps');
+eq(await page.locator('[data-sort="blocks"] > .block').count(), 13, '13 Blöcke');
 const ids0 = await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join());
 await page.locator('[data-act="mv"][data-k="item"][data-id="5"][data-d="1"]').click(); await page.waitForTimeout(100);
 eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '6,5', 'Pfeiltaste: Reihenfolge geändert (Nr. bleibt)');
@@ -116,20 +119,20 @@ const ex1 = await page.evaluate(() => __app.S.plan.exercises[1]);
 ok(ex1.name === 'Bankdrücken Test' && ex1.sets.length === 3 && ex1.sets[0].reps === 8 && ex1.sets[0].weight === 12.5 && ex1.step === 1.25, 'Übung gespeichert');
 // neue Übung
 await page.locator('[data-act="addEx"][data-b="b02"]').click(); await page.waitForSelector('#x-name');
-eq(await page.evaluate(() => location.hash), '#/plan/ex/15', 'neue Übung bekommt feste Nr. 15');
+eq(await page.evaluate(() => location.hash), '#/plan/ex/16', 'neue Übung bekommt feste Nr. 16');
 await page.fill('#x-name', 'Testübung'); await page.locator('[data-act="saveEx"]').click(); await page.waitForTimeout(150);
-await page.locator('a[href="#/plan/ex/15"]').click(); await page.waitForSelector('#x-name');
+await page.locator('a[href="#/plan/ex/16"]').click(); await page.waitForSelector('#x-name');
 await page.locator('[data-act="delEx"]').click(); await shot('14-uebung-loeschen'); await modalOk(); await page.waitForTimeout(150);
-ok(!(await page.evaluate(() => 15 in __app.S.plan.exercises)), 'Übung gelöscht');
+ok(!(await page.evaluate(() => 16 in __app.S.plan.exercises)), 'Übung gelöscht');
 // Block-Zeiten
 await page.locator('a[href="#/plan/block/b02"]').click(); await page.waitForSelector('#b-end'); await hscroll('Block bearbeiten'); await shot('15-block-edit');
 await page.fill('#b-end', '20'); await page.locator('[data-act="saveBlock"]').click(); await page.waitForTimeout(150);
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 75, 'Gesamtdauer aus Blockzeiten (Block verlängert, Summe = max Ende)');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 90, 'Gesamtdauer aus Blockzeiten (Block verlängert, Summe = max Ende)');
 await tapAct('align'); await page.waitForTimeout(150);
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 79, 'Zeiten lückenlos → 79 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 93, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 93 min');
 await page.locator('[data-act="resetPlan"]').click(); await modalOk(); await page.waitForTimeout(200);
 eq(await page.evaluate(() => __app.S.plan.exercises[1].name), 'Bankdrücken liegend', 'Plan zurückgesetzt');
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 75, 'Gesamtdauer wieder 75 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 90, 'Gesamtdauer wieder 90 min');
 
 console.log('5. Eigenes Foto');
 if (OWN_PHOTO) {
@@ -260,6 +263,9 @@ const t1 = await p2.locator('#timerSec').innerText(), c1 = await p2.locator('#cl
 ok(['07:57', '07:58', '07:59', '08:00'].includes(t1), `Cardio-Countdown nach 2 min Display-aus: ${t1}`);
 ok(['02:01', '02:02', '02:03', '02:00'].includes(c1), `Gesamtuhr nach 2 min Display-aus: ${c1}`);
 await p2.locator('[data-act="done"]').click(); await p2.waitForSelector('#in-reps');
+ok(/Wechselzeit → A Drücken/.test(await p2.locator('.rest').innerText()), 'Nach Cardio: Wechselzeit → A Drücken angezeigt');
+eq(await p2.locator('#restSec').innerText(), '01:00', 'Wechselzeit 1 min');
+await p2.screenshot({ path: path.join(SHOTS, '24-wechselzeit.png') });
 await p2.locator('[data-act="done"]').click(); await p2.waitForSelector('.rest');
 await p2.clock.runFor(1000); await p2.clock.fastForward(20_000); await p2.clock.runFor(500);
 const r1 = await p2.locator('#restSec').innerText();

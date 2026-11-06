@@ -185,9 +185,11 @@ function initForm() {
   } else S.ui.form = { idx: step.index, minutes: '', note: '' };
 }
 
+const fmtSec = (r) => (r >= 60 && r % 60 === 0 ? `${r / 60} min` : `${r} s`);
 function restPreview(a, step, next) {
   const r = L.restAfter(a, step, next);
-  return r > 0 ? ` (nach ${r} s Pause)` : '';
+  if (r <= 0) return '';
+  return next.blockId !== step.blockId ? ` (nach ${fmtSec(r)} Wechselzeit)` : ` (nach ${fmtSec(r)} Pause)`;
 }
 const MODE_NAME = { single: 'Einzeln', superset: 'Supersatz', circuit: 'Zirkel', alternate: 'Abwechselnd' };
 function setLabel(step) {
@@ -220,8 +222,8 @@ function viewTraining() {
   }
   if (behind > 0) h += `<div class="card warn sm">Du liegst ${behind} min hinter dem Zeitplan (Block „${esc(step.blockName)}“ sollte um Minute ${fmtNum(blk.end)} fertig sein).</div>`;
   if (a.rest) {
-    h += `<div class="rest"><div class="sm">Pause</div><div class="big" id="restSec">${fmtClock(L.remainingSec(a.rest.endAt, now))}</div>
-      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="rest+">+15 s</button><button class="btn sm" data-act="restskip">Pause beenden</button></div></div>`;
+    h += `<div class="rest"><div class="sm">${a.rest.change ? `Wechselzeit → ${esc(a.rest.toBlock || 'nächster Block')}` : 'Pause'}</div><div class="big" id="restSec">${fmtClock(L.remainingSec(a.rest.endAt, now))}</div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="rest+">+15 s</button><button class="btn sm" data-act="restskip">${a.rest.change ? 'Weiter' : 'Pause beenden'}</button></div></div>`;
   }
   if (step.type === 'timed') {
     const t = a.timer, over = now >= t.endAt;
@@ -472,7 +474,10 @@ function viewPlan() {
   if (kind === 'ex') return viewPlanEx(Number(id));
   if (kind === 'block') return viewPlanBlock(id);
   const p = S.plan;
-  let h = `<h1>Plan</h1><p class="muted">Gesamtdauer: <b>${L.planTotalMinutes(p)} min</b> (aus den Blockzeiten berechnet). Zum Sortieren am ☰ ziehen oder die Pfeile nutzen. Antippen bearbeitet.</p><div data-sort="blocks">`;
+  const std = L.blockChangeOf(p, {});
+  let h = `<h1>Plan</h1><p class="muted">Gesamtdauer: <b>${L.planTotalMinutes(p)} min</b> (aus den Blockzeiten berechnet). Zum Sortieren am ☰ ziehen oder die Pfeile nutzen. Antippen bearbeitet.</p>
+    <label class="f" for="p-chg">Wechselzeit zwischen Blöcken (s)</label><input id="p-chg" inputmode="numeric" data-planchg value="${esc(p.blockChange ?? L.DEFAULT_BLOCK_CHANGE)}">
+    <p class="sm muted">Gilt für alle Blöcke ohne eigenen Wert (Block antippen → „Wechselzeit danach“). Danach „Zeiten lückenlos“ tippen, damit die Zeitfenster die Wechselzeiten enthalten.</p><div data-sort="blocks">`;
   for (const b of p.blocks) {
     h += `<div class="block" data-id="${b.id}"><div class="row"><span class="drag" aria-hidden="true">☰</span>
       <a class="grow" style="text-decoration:none;color:inherit;flex:1;min-width:0" href="#/plan/block/${b.id}"><div class="t"><b>${esc(b.name)}</b></div><div class="s sm muted">${L.fmtWindow(b)}${b.mode === 'superset' ? ' · Supersatz' : b.mode === 'alternate' ? ' · Abwechselnd' : b.mode === 'circuit' ? ` · Zirkel ${b.rounds}×` : ''}${b.kind === 'timed' ? ' · Zeit ' + fmtNum(b.minutes) + ' min' : ''}</div></a>
@@ -486,6 +491,10 @@ function viewPlan() {
       }
       h += `</div><button class="btn ghost sm" style="width:100%" data-act="addEx" data-b="${b.id}">+ Übung in diesen Block</button>`;
     } else h += `<div class="sm muted" style="padding:4px 8px">${esc(b.note || '')}</div>`;
+    if (b !== p.blocks[p.blocks.length - 1]) {
+      const c = L.blockChangeOf(p, b);
+      h += `<div class="sm muted" style="padding:6px 8px 0">↓ danach ${c ? fmtSec(c) + ' Wechselzeit' : 'kein Wechsel'}${c !== std ? ' (eigener Wert)' : ''}</div>`;
+    }
     h += '</div>';
   }
   h += `</div><div class="grid2"><button class="btn" data-act="addBlock">+ Block</button><button class="btn ghost" data-act="align">Zeiten lückenlos</button></div>
@@ -547,7 +556,7 @@ function viewPlanBlock(id) {
   const b = S.plan.blocks.find((x) => x.id === id);
   if (!b) return '<a class="btn ghost" href="#/plan">‹ Plan</a><p>Block nicht gefunden.</p>';
   if (!S.ui.bd || S.ui.bd.id !== id) {
-    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: b.roundRest === null || b.roundRest === undefined || b.roundRest === '' ? (b.mode === 'circuit' ? '60' : '') : String(b.roundRest), minutes: fmtNum(b.minutes ?? 10), note: b.note || '' };
+    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: b.roundRest === null || b.roundRest === undefined || b.roundRest === '' ? (b.mode === 'circuit' ? '60' : '') : String(b.roundRest), minutes: fmtNum(b.minutes ?? 10), note: b.note || '', changeAfter: b.changeAfter === null || b.changeAfter === undefined || b.changeAfter === '' ? '' : String(b.changeAfter) };
   }
   const d = S.ui.bd;
   const opt = (v, t, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`;
@@ -566,6 +575,8 @@ function viewPlanBlock(id) {
     if (d.mode === 'circuit') h += `<div class="grid2"><div><label class="f" for="b-rounds">Runden</label><input id="b-rounds" inputmode="numeric" data-in="bd.rounds" value="${esc(d.rounds)}"></div>
       <div><label class="f" for="b-rr">Pause nach Runde (s)</label><input id="b-rr" inputmode="numeric" data-in="bd.roundRest" value="${esc(d.roundRest)}"></div></div>`;
   }
+  h += `<label class="f" for="b-chg">Wechselzeit danach (s)</label><input id="b-chg" inputmode="numeric" data-in="bd.changeAfter" value="${esc(d.changeAfter)}" placeholder="leer = Standard (${L.blockChangeOf(S.plan, {})} s)">
+    <p class="sm muted">Zeit bis zum nächsten Block, z. B. für den Weg in einen anderen Bereich. 0 = direkt weiter.</p>`;
   return h + `<div class="cta"><button class="btn ok" data-act="saveBlock">Speichern</button></div><button class="btn danger" data-act="delBlock" style="margin-top:8px">Block löschen</button>`;
 }
 
@@ -795,7 +806,7 @@ const ACT = {
     if (!d.name.trim()) { toast('Bitte einen Namen eingeben.'); return; }
     if (start === null || end === null || end < start) { toast('Zeitfenster ungültig (Ende vor Start).'); return; }
     if (d.kind === 'timed' && (b.items || []).length) { toast('Der Block enthält Übungen. Verschiebe oder lösche sie zuerst.'); return; }
-    Object.assign(b, { name: d.name.trim(), start, end, kind: d.kind });
+    Object.assign(b, { name: d.name.trim(), start, end, kind: d.kind, changeAfter: parseNum(d.changeAfter) });
     if (d.kind === 'timed') Object.assign(b, { minutes: parseNum(d.minutes) ?? 1, note: d.note.trim(), mode: 'single' });
     else if (d.mode === 'alternate') {
       Object.assign(b, { mode: d.mode, roundRest: parseNum(d.roundRest) }); // null = Pause der letzten Übung
@@ -867,6 +878,11 @@ function bind() {
     }
     if ('import' in t.dataset && t.files[0]) { await doImport(t.files[0]); t.value = ''; }
     if ('planimport' in t.dataset && t.files[0]) { await doPlanImport(t.files[0]); t.value = ''; }
+    if ('planchg' in t.dataset) {
+      const v = parseNum(t.value);
+      if (v === null || v < 0) { toast('Bitte eine Zahl ≥ 0 eingeben.'); return; }
+      S.plan.blockChange = v; await savePlan(); toast(`Wechselzeit ${fmtSec(v)} gespeichert.`); rerender();
+    }
   });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && S.route[0] === 'training') { wakeLock = null; lockScreen(); tick(); }

@@ -1,6 +1,6 @@
 // Service Worker: alles beim ersten Laden zwischenspeichern, danach offline.
 // Bei jeder Änderung an App-Dateien die Versionsnummer erhöhen.
-const CACHE = 'training-v4';
+const CACHE = 'training-v5';
 const ASSETS = [
   './',
   'index.html',
