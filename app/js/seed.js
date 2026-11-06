@@ -45,6 +45,11 @@ export function defaultPlan() {
       { warmup: { reps: 10, weight: 20 }, sets: sets(2, 10, 40) }),
     ex(14, 'Bauch schräg (Winkel links/rechts verstellbar)', 'Bauchmaschine schräg', 'Becken fixiert, Drehung aus dem Rumpf, Winkel je Seite umstellen',
       { sides: 'Seite', sets: sets(2, 10, null) }),
+    // Beinpresse und Beinbeuger: Werte aus dem alten Plan nicht verfügbar → Gewicht offen (erster Satz wird Soll)
+    ex(16, 'Beinpresse', 'Beinpresse', 'Füße hüftbreit auf der Platte, Knie nicht ganz durchstrecken',
+      { unit: 'kg', noPhoto: true, sets: sets(2, 10, null) }),
+    ex(17, 'Beinbeuger', 'Beinbeuger-Maschine', 'Becken fest am Polster, langsam ablassen',
+      { unit: 'kg', noPhoto: true, sets: sets(2, 10, null) }),
     ex(15, 'Plank', 'Matte / Boden', 'Körper gerade, Bauch und Po fest, nicht durchhängen',
       { unit: '', noPhoto: true, rest: 45, sets: [{ reps: 1, weight: null, text: '60 s halten' }, { reps: 1, weight: null, text: '60 s halten' }] }),
   ].forEach((e) => { exercises[e.id] = e; });
@@ -54,7 +59,7 @@ export function defaultPlan() {
     B('b01', 'Cardio Aufwärmen', 0, 10, { kind: 'timed', minutes: 10, note: 'Rad, Crosstrainer oder Laufband, locker bis mittel' }),
     // Roter Käfig: alle Geräte im selben Bereich, daher nur 30 s Wechsel zwischen den Übungen
     B('b02', 'A Roter Käfig', 0, 19, { items: [1, 2, 3, 14], switchRest: 30 }),
-    B('b06', 'B Zirkeltraining', 0, 10, { mode: 'circuit', rounds: 2, roundRest: 60, items: [4, 5, 6, 11] }),
+    B('b06', 'B Zirkeltraining', 0, 13, { mode: 'circuit', rounds: 2, roundRest: 60, items: [4, 5, 6, 16, 17, 11] }),
     // Freie Gewichte: Stange und Seilzug abwechselnd, Plank als eigener Block direkt dahinter
     B('b08', 'C Freie Gewichte', 0, 8, { mode: 'alternate', items: [7, 8], roundRest: null }),
     B('b08p', 'C Plank', 0, 3, { items: [15] }),

@@ -106,7 +106,7 @@ ok(/A Roter Käfig[\s\S]*B Zirkeltraining[\s\S]*C Freie Gewichte[\s\S]*C Plank[\
 eq(await page.locator('[data-sort="blocks"] > .block').count(), 8, '8 Blöcke');
 const ids0 = await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join());
 await page.locator('[data-act="mv"][data-k="item"][data-id="5"][data-d="1"]').click(); await page.waitForTimeout(100);
-eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '4,6,5,11', 'Pfeiltaste: Reihenfolge geändert (Nr. bleibt)');
+eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '4,6,5,16,17,11', 'Pfeiltaste: Reihenfolge geändert (Nr. bleibt)');
 // Drag & Drop per Zeiger: Übung 6 hinter 5 ziehen
 const h6 = page.locator('[data-sort="items"][data-key="b06"] .item[data-id="6"] .drag');
 const t5 = page.locator('[data-sort="items"][data-key="b06"] .item[data-id="5"]');
@@ -114,7 +114,7 @@ await h6.scrollIntoViewIfNeeded();
 const hb = await h6.boundingBox(), tb = await t5.boundingBox();
 await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2); await page.mouse.down();
 await page.mouse.move(tb.x + 50, tb.y + tb.height - 5, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(250);
-eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '4,5,6,11', 'Drag & Drop: Reihenfolge geändert');
+eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '4,5,6,16,17,11', 'Drag & Drop: Reihenfolge geändert');
 await page.locator('a[href="#/plan/ex/1"]').click(); await page.waitForSelector('#x-name'); await hscroll('Übung bearbeiten'); await shot('13-uebung-edit');
 await page.fill('#x-name', 'Bankdrücken Test'); await page.fill('#x-r0', '8'); await page.fill('#x-w0', '12,5'); await page.fill('#x-step', '1,25');
 await page.locator('[data-act="xaddSet"]').click(); await page.locator('[data-act="saveEx"]').click(); await page.waitForTimeout(150);
@@ -122,20 +122,20 @@ const ex1 = await page.evaluate(() => __app.S.plan.exercises[1]);
 ok(ex1.name === 'Bankdrücken Test' && ex1.sets.length === 3 && ex1.sets[0].reps === 8 && ex1.sets[0].weight === 12.5 && ex1.step === 1.25, 'Übung gespeichert');
 // neue Übung
 await page.locator('[data-act="addEx"][data-b="b02"]').click(); await page.waitForSelector('#x-name');
-eq(await page.evaluate(() => location.hash), '#/plan/ex/16', 'neue Übung bekommt feste Nr. 16');
+eq(await page.evaluate(() => location.hash), '#/plan/ex/18', 'neue Übung bekommt feste Nr. 18');
 await page.fill('#x-name', 'Testübung'); await page.locator('[data-act="saveEx"]').click(); await page.waitForTimeout(150);
-await page.locator('a[href="#/plan/ex/16"]').click(); await page.waitForSelector('#x-name');
+await page.locator('a[href="#/plan/ex/18"]').click(); await page.waitForSelector('#x-name');
 await page.locator('[data-act="delEx"]').click(); await shot('14-uebung-loeschen'); await modalOk(); await page.waitForTimeout(150);
-ok(!(await page.evaluate(() => 16 in __app.S.plan.exercises)), 'Übung gelöscht');
+ok(!(await page.evaluate(() => 18 in __app.S.plan.exercises)), 'Übung gelöscht');
 // Block-Zeiten
 await page.locator('a[href="#/plan/block/b02"]').click(); await page.waitForSelector('#b-end'); await hscroll('Block bearbeiten'); await shot('15-block-edit');
 await page.fill('#b-end', '33'); await page.locator('[data-act="saveBlock"]').click(); await page.waitForTimeout(150);
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 74, 'Gesamtdauer aus Blockzeiten (Block verlängert, Summe = max Ende)');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 77, 'Gesamtdauer aus Blockzeiten (Block verlängert, Summe = max Ende)');
 await tapAct('align'); await page.waitForTimeout(150);
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 77, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 77 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 80, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 80 min');
 await page.locator('[data-act="resetPlan"]').click(); await modalOk(); await page.waitForTimeout(200);
 eq(await page.evaluate(() => __app.S.plan.exercises[1].name), 'Bankdrücken liegend', 'Plan zurückgesetzt');
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 74, 'Gesamtdauer wieder 74 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 77, 'Gesamtdauer wieder 77 min');
 
 console.log('5. Eigenes Foto');
 if (OWN_PHOTO) {

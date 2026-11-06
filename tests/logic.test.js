@@ -576,13 +576,16 @@ test('Alte Modi: Auslassen beendet die laufende Pause wie bisher', () => {
 });
 
 // ---------- Wechselzeit zwischen Blöcken und neuer Ausgangsplan ----------
-test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining, freie Gewichte, Plank; 9 und 10 entfallen', () => {
+test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining mit Beinpresse/Beinbeuger, freie Gewichte, Plank; 9 und 10 entfallen', () => {
   const p = defaultPlan();
   const by = Object.fromEntries(p.blocks.map((b) => [b.name, b]));
   assert.deepEqual(p.blocks.map((b) => b.name), ['Cardio Aufwärmen', 'A Roter Käfig', 'B Zirkeltraining', 'C Freie Gewichte', 'C Plank', 'D Zirkel', 'Puffer', 'Ausklang']);
   assert.deepEqual(by['A Roter Käfig'].items, [1, 2, 3, 14]);
   assert.equal(by['A Roter Käfig'].switchRest, 30);
-  assert.deepEqual(by['B Zirkeltraining'].items, [4, 5, 6, 11]);
+  assert.deepEqual(by['B Zirkeltraining'].items, [4, 5, 6, 16, 17, 11]);
+  assert.equal(p.exercises[16].name, 'Beinpresse');
+  assert.equal(p.exercises[17].name, 'Beinbeuger');
+  assert.ok([16, 17].every((id) => p.exercises[id].sets.length === 2 && p.exercises[id].sets.every((x) => x.reps === 10 && x.weight === null)));
   assert.equal(by['B Zirkeltraining'].mode, 'circuit');
   assert.deepEqual(by['C Freie Gewichte'].items, [7, 8]);
   assert.equal(by['C Freie Gewichte'].mode, 'alternate');
@@ -596,7 +599,7 @@ test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining, freie Gewichte, Plank; 9
   assert.ok(p.exercises[7].sets.every((x) => x.reps === 10) && p.exercises[8].sets.every((x) => x.reps === 10));
   assert.ok(p.blocks.every((b) => L.blockChangeOf(p, b) === 60));
   for (let k = 1; k < p.blocks.length; k++) assert.equal(p.blocks[k].start, p.blocks[k - 1].end + 1);
-  assert.equal(L.planTotalMinutes(p), 74);
+  assert.equal(L.planTotalMinutes(p), 77);
 });
 
 test('Roter Käfig: 30 s Wechsel zwischen den Übungen, Satzpausen unverändert', () => {
@@ -684,4 +687,15 @@ test('Zeiten lückenlos berücksichtigt Wechselzeiten', () => {
   assert.equal(L.planTotalMinutes(p), 75 + 11);
   p.blockChange = 0; L.realignTimes(p);
   assert.equal(L.planTotalMinutes(p), 75);
+});
+
+test('Zirkeltraining: Beinpresse und Beinbeuger in jeder Runde, Gewicht beim ersten Satz wird Soll', () => {
+  const st = L.buildSteps(defaultPlan()).filter((s) => s.blockId === 'b06' && s.setType === 'work');
+  assert.deepEqual(st.map((s) => `${s.exId}/${s.round}`), ['4/1', '5/1', '6/1', '16/1', '17/1', '11/1', '4/2', '5/2', '6/2', '16/2', '17/2', '11/2']);
+  const a = L.newActive(defaultPlan(), T0);
+  while (L.currentStep(a).exId !== 16) doCur(a);
+  assert.equal(L.currentStep(a).weight, null);
+  const r = L.completeStep(a, { reps: 10, weight: 80 }, T0);
+  assert.deepEqual(r.newTarget, { exId: 16, weight: 80 });
+  assert.ok(a.steps.filter((s) => s.exId === 16).every((s) => s.weight === 80));
 });
