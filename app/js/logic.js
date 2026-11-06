@@ -131,10 +131,15 @@ export function buildSteps(plan, opts = {}) {
     if (!exs.length) continue;
     const mode = block.mode || 'single';
     if (mode === 'single') {
-      for (const ex of exs) {
+      // Wechselzeit zwischen den Übungen im Block (z. B. 30 s im selben Bereich); leer = Pause der Übung wie bisher
+      const sw = isBlank(block.switchRest) ? null : Math.max(0, Number(block.switchRest) || 0);
+      exs.forEach((ex, k) => {
         if (ex.warmup) steps.push(...makeSetSteps(block, ex, 'warmup', ex.warmup, { setNo: 0, setCount: ex.sets.length }, ex.warmRest ?? 30));
-        ex.sets.forEach((s, i) => steps.push(...makeSetSteps(block, ex, 'work', s, { setNo: i + 1, setCount: ex.sets.length }, ex.rest ?? 60)));
-      }
+        ex.sets.forEach((s, i) => {
+          const lastOfEx = i === ex.sets.length - 1 && k < exs.length - 1;
+          steps.push(...makeSetSteps(block, ex, 'work', s, { setNo: i + 1, setCount: ex.sets.length }, lastOfEx && sw !== null ? sw : ex.rest ?? 60));
+        });
+      });
     } else {
       const warm = exs.filter((e) => e.warmup);
       const alt = mode === 'alternate'; // Abwechselnd (Satzpaare): 30 s Wechsel, Pause nach der Runde
@@ -280,7 +285,8 @@ export function completeStep(a, values, now) {
   const rest = next < a.steps.length ? restAfter(a, step, a.steps[next]) : 0;
   const nx = a.steps[next];
   const change = !!nx && nx.blockId !== step.blockId;
-  a.rest = rest > 0 ? { endAt: now + rest * 1000, total: rest, notified: false, after: step.index, change, toBlock: change ? nx.blockName : null } : null;
+  const toEx = !change && nx && nx.type === 'set' && step.type === 'set' && nx.exId !== step.exId && step.mode === 'single' ? nx.name : null;
+  a.rest = rest > 0 ? { endAt: now + rest * 1000, total: rest, notified: false, after: step.index, change, toBlock: change ? nx.blockName : null, toEx } : null;
   a.stepIndex = next;
   if (next < a.steps.length) enterStep(a, now); else a.timer = null;
   return { finished: next >= a.steps.length, newTarget };

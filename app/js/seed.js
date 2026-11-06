@@ -37,10 +37,6 @@ export function defaultPlan() {
         sets: sets(2, 10, 5) }),
     ex(8, 'Trizepsdrücken am Seil', 'Kabelturm mit Seilgriff', 'Ellbogen am Körper, Seil bis unter die Hüfte',
       { warmup: { reps: 10, weight: 10 }, sets: sets(2, 10, 25) }),
-    ex(9, 'Kabel einarmig (Bizeps-Curl)', 'Kabelturm mit Einzelgriff', 'Ellbogen fixiert, ohne Schwung',
-      { unit: 'kg je Arm', sides: 'Arm', warmup: { reps: 10, weight: 10 }, sets: sets(2, 10, 20) }),
-    ex(10, 'Kabel-Butterfly frei', 'Kabelturm mit Einzelgriff', 'Leicht gebeugte Arme, Hände vor dem Körper',
-      { optional: true, warmup: { reps: 10, weight: 10 }, sets: sets(2, 10, 15) }),
     ex(11, 'Waden sitzend', 'Wadenmaschine sitzend', 'Ganz runter, ganz hoch',
       { unit: '', sets: [{ reps: 20, weight: null }] }),
     ex(12, 'Bauch ohne Gewicht', 'Matte / Boden', 'Lendenwirbelsäule am Boden',
@@ -56,19 +52,15 @@ export function defaultPlan() {
   const B = (id, name, start, end, o) => ({ id, name, start, end, kind: 'sets', mode: 'single', items: [], ...o });
   const blocks = [
     B('b01', 'Cardio Aufwärmen', 0, 10, { kind: 'timed', minutes: 10, note: 'Rad, Crosstrainer oder Laufband, locker bis mittel' }),
-    B('b02', 'A Drücken', 10, 16, { items: [1] }),
-    B('b03', 'A Ziehen', 16, 21, { items: [2] }),
-    B('b04', 'A Drücken', 21, 26, { items: [4] }),
-    B('b05', 'A Ziehen', 26, 31, { items: [3] }),
-    B('b06', 'B Supersatz', 31, 38, { mode: 'superset', items: [5, 6] }),
-    B('b07', 'B Brust (optional)', 38, 42, { items: [10] }),
+    // Roter Käfig: alle Geräte im selben Bereich, daher nur 30 s Wechsel zwischen den Übungen
+    B('b02', 'A Roter Käfig', 0, 19, { items: [1, 2, 3, 14], switchRest: 30 }),
+    B('b06', 'B Zirkeltraining', 0, 10, { mode: 'circuit', rounds: 2, roundRest: 60, items: [4, 5, 6, 11] }),
     // Freie Gewichte: Stange und Seilzug abwechselnd, Plank als eigener Block direkt dahinter
-    B('b08', 'C Freie Gewichte', 42, 50, { mode: 'alternate', items: [7, 8], roundRest: null }),
-    B('b08p', 'C Plank', 50, 53, { items: [15] }),
-    B('b09', 'C Bizeps', 50, 54, { items: [9] }),
-    B('b10', 'D Zirkel', 54, 64, { mode: 'circuit', rounds: 2, roundRest: 60, items: [13, 11, 14, 12] }),
-    B('b11', 'Puffer', 64, 65, { kind: 'timed', minutes: 1, note: 'Wechselzeit, Trinken' }),
-    B('b12', 'Ausklang', 65, 75, { kind: 'timed', minutes: 10, note: 'Cardio locker, danach Brust, Schulter und Waden dehnen' }),
+    B('b08', 'C Freie Gewichte', 0, 8, { mode: 'alternate', items: [7, 8], roundRest: null }),
+    B('b08p', 'C Plank', 0, 3, { items: [15] }),
+    B('b10', 'D Zirkel', 0, 6, { mode: 'circuit', rounds: 2, roundRest: 60, items: [13, 12] }),
+    B('b11', 'Puffer', 0, 1, { kind: 'timed', minutes: 1, note: 'Wechselzeit, Trinken' }),
+    B('b12', 'Ausklang', 0, 10, { kind: 'timed', minutes: 10, note: 'Cardio locker, danach Brust, Schulter und Waden dehnen' }),
   ];
   // Zeitfenster inkl. Wechselzeiten (1 min zwischen den Blöcken) lückenlos berechnen
   return realignTimes({ version: PLAN_VERSION, blockChange: 60, blocks, exercises });

@@ -69,7 +69,8 @@ console.log('3. Verlauf: gespeichert, bearbeiten, löschen');
 const sess = await page.evaluate(() => __app.S.sessions);
 eq(sess.length, 1, 'ein Training gespeichert');
 const nSets = sess[0].entries.reduce((n, e) => n + (e.sets ? e.sets.length : 0), 0);
-ok(nSets >= 38, `Sätze gespeichert (${nSets})`);
+const planSets = await page.evaluate(() => __app.L.buildSteps(__app.S.plan).filter((x) => x.type === 'set').length);
+eq(nSets, planSets, 'Alle Sätze des Plans gespeichert');
 const ex14 = sess[0].entries.find((e) => e.exId === 14);
 ok(ex14 && ex14.sets.length === 4 && ex14.sets.every((s) => s.weight === 25), 'Übung 14: 4 Sätze (links/rechts), Gewicht 25 übernommen');
 eq(await page.evaluate(() => __app.S.plan.exercises[14].sets[0].weight), 25, 'Übung 14: Soll-Gewicht im Plan gesetzt');
@@ -98,12 +99,14 @@ eq(await page.evaluate(() => __app.S.sessions.length), 1, 'ganzes Training gelö
 console.log('4. Plan-Editor');
 await go('plan'); await hscroll('Plan'); await shot('12-plan');
 eq(await page.locator('#p-chg').inputValue(), '60', 'Plan: Wechselzeit zwischen Blöcken 60 s');
-ok((await page.locator('text=↓ danach 1 min Wechselzeit').count()) === 12, 'Plan: 12 Übergänge mit 1 min Wechselzeit angezeigt');
-ok(/C Freie Gewichte[\s\S]*C Plank[\s\S]*C Bizeps/.test(await page.locator('[data-sort="blocks"]').innerText()), 'Plan: Freie Gewichte, dann Plank, dann Bizeps');
-eq(await page.locator('[data-sort="blocks"] > .block').count(), 13, '13 Blöcke');
+ok((await page.locator('text=↓ danach 1 min Wechselzeit').count()) === 7, 'Plan: 7 Übergänge mit 1 min Wechselzeit angezeigt');
+ok(/A Roter Käfig[\s\S]*30 s Wechsel zwischen Übungen/.test(await page.locator('[data-sort="blocks"]').innerText()), 'Plan: Roter Käfig mit 30 s Wechsel zwischen Übungen');
+ok(!(await page.evaluate(() => 9 in __app.S.plan.exercises || 10 in __app.S.plan.exercises)), 'Plan: Übungen 9 und 10 entfallen');
+ok(/A Roter Käfig[\s\S]*B Zirkeltraining[\s\S]*C Freie Gewichte[\s\S]*C Plank[\s\S]*D Zirkel/.test(await page.locator('[data-sort="blocks"]').innerText()), 'Plan: Reihenfolge der Blöcke');
+eq(await page.locator('[data-sort="blocks"] > .block').count(), 8, '8 Blöcke');
 const ids0 = await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join());
 await page.locator('[data-act="mv"][data-k="item"][data-id="5"][data-d="1"]').click(); await page.waitForTimeout(100);
-eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '6,5', 'Pfeiltaste: Reihenfolge geändert (Nr. bleibt)');
+eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '4,6,5,11', 'Pfeiltaste: Reihenfolge geändert (Nr. bleibt)');
 // Drag & Drop per Zeiger: Übung 6 hinter 5 ziehen
 const h6 = page.locator('[data-sort="items"][data-key="b06"] .item[data-id="6"] .drag');
 const t5 = page.locator('[data-sort="items"][data-key="b06"] .item[data-id="5"]');
@@ -111,7 +114,7 @@ await h6.scrollIntoViewIfNeeded();
 const hb = await h6.boundingBox(), tb = await t5.boundingBox();
 await page.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2); await page.mouse.down();
 await page.mouse.move(tb.x + 50, tb.y + tb.height - 5, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(250);
-eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '5,6', 'Drag & Drop: Reihenfolge geändert');
+eq(await page.evaluate(() => __app.S.plan.blocks.find((b) => b.id === 'b06').items.join()), '4,5,6,11', 'Drag & Drop: Reihenfolge geändert');
 await page.locator('a[href="#/plan/ex/1"]').click(); await page.waitForSelector('#x-name'); await hscroll('Übung bearbeiten'); await shot('13-uebung-edit');
 await page.fill('#x-name', 'Bankdrücken Test'); await page.fill('#x-r0', '8'); await page.fill('#x-w0', '12,5'); await page.fill('#x-step', '1,25');
 await page.locator('[data-act="xaddSet"]').click(); await page.locator('[data-act="saveEx"]').click(); await page.waitForTimeout(150);
@@ -126,13 +129,13 @@ await page.locator('[data-act="delEx"]').click(); await shot('14-uebung-loeschen
 ok(!(await page.evaluate(() => 16 in __app.S.plan.exercises)), 'Übung gelöscht');
 // Block-Zeiten
 await page.locator('a[href="#/plan/block/b02"]').click(); await page.waitForSelector('#b-end'); await hscroll('Block bearbeiten'); await shot('15-block-edit');
-await page.fill('#b-end', '20'); await page.locator('[data-act="saveBlock"]').click(); await page.waitForTimeout(150);
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 90, 'Gesamtdauer aus Blockzeiten (Block verlängert, Summe = max Ende)');
+await page.fill('#b-end', '33'); await page.locator('[data-act="saveBlock"]').click(); await page.waitForTimeout(150);
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 74, 'Gesamtdauer aus Blockzeiten (Block verlängert, Summe = max Ende)');
 await tapAct('align'); await page.waitForTimeout(150);
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 93, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 93 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 77, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 77 min');
 await page.locator('[data-act="resetPlan"]').click(); await modalOk(); await page.waitForTimeout(200);
 eq(await page.evaluate(() => __app.S.plan.exercises[1].name), 'Bankdrücken liegend', 'Plan zurückgesetzt');
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 90, 'Gesamtdauer wieder 90 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 74, 'Gesamtdauer wieder 74 min');
 
 console.log('5. Eigenes Foto');
 if (OWN_PHOTO) {
@@ -223,12 +226,12 @@ console.log('7b. Gerät belegt: später, vorziehen, auslassen und nachholen');
   await q.click('#modal [data-m="later"]'); await q.waitForTimeout(150);
   eq(await h1(), 'Enges Rudern', 'Später: nächste Übung kommt dran');
   await q.click('[data-act="order"]'); await q.click('#modal [data-m="go|b:b06"]'); await q.waitForTimeout(150);
-  eq(await h1(), 'Butterfly', 'Supersatz B vorgezogen');
+  eq(await h1(), 'Schulterdrücken', 'Zirkeltraining B vorgezogen');
   await q.click('[data-act="order"]'); await q.click('#modal [data-m="skip"]'); await q.waitForTimeout(150);
-  eq(await h1(), 'Reverse Butterfly', 'Butterfly ausgelassen, Supersatz läuft weiter');
+  eq(await h1(), 'Butterfly', 'Schulterdrücken ausgelassen, Zirkel läuft weiter');
   ok(/ausgelassene Übung/.test(await q.locator('#app').innerText()), 'Hinweis auf ausgelassene Übung');
   await q.click('[data-act="order"]'); await q.waitForSelector('#modal [data-m="go|b:b06"]');
-  ok(/Wieder aufnehmen: Butterfly/.test(await q.locator('#modal').innerText()), 'Ausgelassene Übung im laufenden Block wieder aufnehmbar');
+  ok(/Wieder aufnehmen: Schulterdrücken/.test(await q.locator('#modal').innerText()), 'Ausgelassene Übung im laufenden Block wieder aufnehmbar');
   await q.click('#modal [data-m="x"]');
   // Rest durchklicken
   for (let i = 0; i < 200 && q.url().includes('#/training'); i++) {
@@ -240,12 +243,12 @@ console.log('7b. Gerät belegt: später, vorziehen, auslassen und nachholen');
   ok(/Noch offen/.test(await q.locator('h1').first().innerText()), 'Am Ende: ausgelassene Übung wird angeboten');
   await q.screenshot({ path: path.join(SHOTS, '20-noch-offen.png') });
   await q.click('[data-act="bring"]'); await q.waitForTimeout(150);
-  eq(await h1(), 'Butterfly', 'Ausgelassene Übung nachgeholt');
+  eq(await h1(), 'Schulterdrücken', 'Ausgelassene Übung nachgeholt');
   for (let i = 0; i < 10 && q.url().includes('#/training'); i++) { await q.click('[data-act="done"]'); await q.waitForTimeout(30); }
   await q.waitForURL(/#\/history\/\w+/);
   const ss = await q.evaluate(() => __app.S.sessions[0]);
-  const bf = ss.entries.find((e) => e.exId === 5);
-  ok(bf && bf.sets.filter((x) => x.type === 'work').length === 2, 'Butterfly-Arbeitssätze gespeichert');
+  const bf = ss.entries.find((e) => e.exId === 4);
+  ok(bf && bf.sets.filter((x) => x.type === 'work').length === 2, 'Schulterdrücken-Arbeitssätze nachgeholt und gespeichert');
   const total = await q.evaluate(() => __app.L.buildSteps(__app.S.plan).filter((x) => x.type === 'set').length);
   eq(ss.entries.reduce((n, e) => n + (e.sets ? e.sets.length : 0), 0), total, 'Alle Sätze trotz geänderter Reihenfolge gespeichert');
   await cx.close();
@@ -263,7 +266,7 @@ const t1 = await p2.locator('#timerSec').innerText(), c1 = await p2.locator('#cl
 ok(['07:57', '07:58', '07:59', '08:00'].includes(t1), `Cardio-Countdown nach 2 min Display-aus: ${t1}`);
 ok(['02:01', '02:02', '02:03', '02:00'].includes(c1), `Gesamtuhr nach 2 min Display-aus: ${c1}`);
 await p2.locator('[data-act="done"]').click(); await p2.waitForSelector('#in-reps');
-ok(/Wechselzeit → A Drücken/.test(await p2.locator('.rest').innerText()), 'Nach Cardio: Wechselzeit → A Drücken angezeigt');
+ok(/Wechselzeit → A Roter Käfig/.test(await p2.locator('.rest').innerText()), 'Nach Cardio: Wechselzeit → A Roter Käfig angezeigt');
 eq(await p2.locator('#restSec').innerText(), '01:00', 'Wechselzeit 1 min');
 await p2.screenshot({ path: path.join(SHOTS, '24-wechselzeit.png') });
 await p2.locator('[data-act="done"]').click(); await p2.waitForSelector('.rest');

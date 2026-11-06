@@ -576,24 +576,49 @@ test('Alte Modi: Auslassen beendet die laufende Pause wie bisher', () => {
 });
 
 // ---------- Wechselzeit zwischen Blöcken und neuer Ausgangsplan ----------
-test('Neuer Ausgangsplan: freie Gewichte abwechselnd (Stange/Seilzug), Plank als eigener Block dahinter', () => {
+test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining, freie Gewichte, Plank; 9 und 10 entfallen', () => {
   const p = defaultPlan();
-  const names = p.blocks.map((b) => b.name);
-  const i = names.indexOf('C Freie Gewichte');
-  assert.equal(names[i + 1], 'C Plank');
-  const fw = p.blocks[i], pl = p.blocks[i + 1];
-  assert.equal(fw.mode, 'alternate');
-  assert.deepEqual(fw.items, [7, 8]);
-  assert.deepEqual(pl.items, [15]);
-  assert.equal(pl.mode, 'single');
-  assert.equal(p.exercises[15].name, 'Plank');
+  const by = Object.fromEntries(p.blocks.map((b) => [b.name, b]));
+  assert.deepEqual(p.blocks.map((b) => b.name), ['Cardio Aufwärmen', 'A Roter Käfig', 'B Zirkeltraining', 'C Freie Gewichte', 'C Plank', 'D Zirkel', 'Puffer', 'Ausklang']);
+  assert.deepEqual(by['A Roter Käfig'].items, [1, 2, 3, 14]);
+  assert.equal(by['A Roter Käfig'].switchRest, 30);
+  assert.deepEqual(by['B Zirkeltraining'].items, [4, 5, 6, 11]);
+  assert.equal(by['B Zirkeltraining'].mode, 'circuit');
+  assert.deepEqual(by['C Freie Gewichte'].items, [7, 8]);
+  assert.equal(by['C Freie Gewichte'].mode, 'alternate');
+  assert.deepEqual(by['C Plank'].items, [15]);
+  assert.deepEqual(by['D Zirkel'].items, [13, 12]);
+  assert.ok(!p.exercises[9] && !p.exercises[10]);
+  assert.ok(!p.blocks.some((b) => (b.items || []).some((i) => i === 9 || i === 10)));
+  // jede Übung genau einmal im Plan
+  const all = p.blocks.flatMap((b) => b.items || []).sort((x, y) => x - y);
+  assert.deepEqual(all, Object.keys(p.exercises).map(Number).sort((x, y) => x - y));
   assert.ok(p.exercises[7].sets.every((x) => x.reps === 10) && p.exercises[8].sets.every((x) => x.reps === 10));
-  const st = L.buildSteps(p).filter((s) => s.blockId === fw.id && s.setType === 'work');
-  assert.deepEqual(st.map((s) => s.exId + '/' + s.round), ['7/1', '8/1', '7/2', '8/2']);
-  // alle Wechselzeiten 1 min, Zeitfenster enthalten sie
   assert.ok(p.blocks.every((b) => L.blockChangeOf(p, b) === 60));
   for (let k = 1; k < p.blocks.length; k++) assert.equal(p.blocks[k].start, p.blocks[k - 1].end + 1);
-  assert.equal(L.planTotalMinutes(p), 90);
+  assert.equal(L.planTotalMinutes(p), 74);
+});
+
+test('Roter Käfig: 30 s Wechsel zwischen den Übungen, Satzpausen unverändert', () => {
+  const st = L.buildSteps(defaultPlan()).filter((s) => s.blockId === 'b02');
+  const k = (s) => `${s.exId}${s.setType === 'warmup' ? 'w' : ''}${s.side ? s.side[0] : ''}:${s.rest}`;
+  assert.deepEqual(st.map(k), ['1w:30', '1:90', '1:30', '2w:30', '2:90', '2:30', '3w:30', '3:90', '3:30', '14l:0', '14r:60', '14l:0', '14r:0']);
+  // im Training: Wechsel-Anzeige mit nächster Übung
+  const a = L.newActive(defaultPlan(), T0);
+  doCur(a); doCur(a); doCur(a); doCur(a);      // Cardio, 1w, 1, 1 (letzter Satz)
+  assert.equal(a.rest.total, 30);
+  assert.equal(a.rest.toEx, 'Enges Rudern');
+  assert.equal(a.rest.change, false);
+});
+
+test('Wechselzeit zwischen Übungen: leer = wie bisher, 0 = direkt weiter', () => {
+  const p = oldPlan();
+  const b = p.blocks.find((x) => x.id === 'b02');
+  b.items = [1, 2];
+  const r = () => L.buildSteps(p).filter((s) => s.blockId === 'b02').map((s) => s.rest);
+  assert.deepEqual(r(), [30, 90, 90, 30, 90, 0]);
+  b.switchRest = 0;  assert.deepEqual(r(), [30, 90, 0, 30, 90, 0]);
+  b.switchRest = ''; assert.deepEqual(r(), [30, 90, 90, 30, 90, 0]);
 });
 
 test('Wechselzeit: 1 min zwischen allen Blöcken, auch Freie Gewichte → Plank → nächster Block', () => {
@@ -609,7 +634,7 @@ test('Wechselzeit: 1 min zwischen allen Blöcken, auch Freie Gewichte → Plank 
   }
   assert.equal(log.length, p.blocks.length - 1);
   assert.ok(log.every((x) => x.endsWith(':60W')), log.join(' | '));
-  assert.ok(log.includes('C Freie Gewichte→C Plank:60W') && log.includes('C Plank→C Bizeps:60W'));
+  assert.ok(log.includes('C Freie Gewichte→C Plank:60W') && log.includes('C Plank→D Zirkel:60W'));
   // Innerhalb der Blöcke: Freie Gewichte 30 s Wechsel / Rundenpause 60 s, Plank 45 s zwischen den Sätzen
   const b = L.newActive(p, T0);
   const r = [];
@@ -642,13 +667,13 @@ test('Wechselzeit: auch beim Vorziehen über Blockgrenzen; Auslassen beendet sie
   const a = L.newActive(defaultPlan(), T0);
   L.completeStep(a, { actualSec: 600 }, T0);      // Cardio → Wechselzeit 60 s läuft
   assert.ok(a.rest.change);
-  L.skipCurrent(a, T0 + 5000);                    // Bankdrücken auslassen: Weg läuft weiter
+  L.skipCurrent(a, T0 + 5000);                    // erste Übung im Roten Käfig auslassen: Weg läuft weiter
   assert.equal(L.remainingSec(a.rest.endAt, T0 + 5000), 55);
   const a2 = L.newActive(defaultPlan(), T0);
   doCur(a2);
-  L.bringToFront(a2, 'b:b06', T0);                // Supersatz B vorgezogen
+  L.bringToFront(a2, 'b:b06', T0);                // Zirkeltraining B vorgezogen
   while (L.currentStep(a2).blockId === 'b06') doCur(a2, T0);
-  assert.equal(a2.rest.total, 60);                // danach Wechsel zurück zu A Drücken
+  assert.equal(a2.rest.total, 60);                // danach Wechsel zurück zum Roten Käfig
   assert.ok(a2.rest.change);
 });
 

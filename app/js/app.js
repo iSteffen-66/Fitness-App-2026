@@ -222,7 +222,7 @@ function viewTraining() {
   }
   if (behind > 0) h += `<div class="card warn sm">Du liegst ${behind} min hinter dem Zeitplan (Block „${esc(step.blockName)}“ sollte um Minute ${fmtNum(blk.end)} fertig sein).</div>`;
   if (a.rest) {
-    h += `<div class="rest"><div class="sm">${a.rest.change ? `Wechselzeit → ${esc(a.rest.toBlock || 'nächster Block')}` : 'Pause'}</div><div class="big" id="restSec">${fmtClock(L.remainingSec(a.rest.endAt, now))}</div>
+    h += `<div class="rest"><div class="sm">${a.rest.change ? `Wechselzeit → ${esc(a.rest.toBlock || 'nächster Block')}` : a.rest.toEx ? `Wechsel → ${esc(a.rest.toEx)}` : 'Pause'}</div><div class="big" id="restSec">${fmtClock(L.remainingSec(a.rest.endAt, now))}</div>
       <div class="row" style="margin-top:8px"><button class="btn sm" data-act="rest+">+15 s</button><button class="btn sm" data-act="restskip">${a.rest.change ? 'Weiter' : 'Pause beenden'}</button></div></div>`;
   }
   if (step.type === 'timed') {
@@ -480,7 +480,7 @@ function viewPlan() {
     <p class="sm muted">Gilt für alle Blöcke ohne eigenen Wert (Block antippen → „Wechselzeit danach“). Danach „Zeiten lückenlos“ tippen, damit die Zeitfenster die Wechselzeiten enthalten.</p><div data-sort="blocks">`;
   for (const b of p.blocks) {
     h += `<div class="block" data-id="${b.id}"><div class="row"><span class="drag" aria-hidden="true">☰</span>
-      <a class="grow" style="text-decoration:none;color:inherit;flex:1;min-width:0" href="#/plan/block/${b.id}"><div class="t"><b>${esc(b.name)}</b></div><div class="s sm muted">${L.fmtWindow(b)}${b.mode === 'superset' ? ' · Supersatz' : b.mode === 'alternate' ? ' · Abwechselnd' : b.mode === 'circuit' ? ` · Zirkel ${b.rounds}×` : ''}${b.kind === 'timed' ? ' · Zeit ' + fmtNum(b.minutes) + ' min' : ''}</div></a>
+      <a class="grow" style="text-decoration:none;color:inherit;flex:1;min-width:0" href="#/plan/block/${b.id}"><div class="t"><b>${esc(b.name)}</b></div><div class="s sm muted">${L.fmtWindow(b)}${b.mode === 'superset' ? ' · Supersatz' : b.mode === 'alternate' ? ' · Abwechselnd' : b.mode === 'circuit' ? ` · Zirkel ${b.rounds}×` : ''}${b.kind !== 'timed' && (b.mode || 'single') === 'single' && b.switchRest !== null && b.switchRest !== undefined && b.switchRest !== '' ? ` · ${fmtSec(Number(b.switchRest))} Wechsel zwischen Übungen` : ''}${b.kind === 'timed' ? ' · Zeit ' + fmtNum(b.minutes) + ' min' : ''}</div></a>
       <div class="row fit">${arrows('block', b.id)}</div></div>`;
     if (b.kind !== 'timed') {
       h += `<div data-sort="items" data-key="${b.id}">`;
@@ -556,7 +556,7 @@ function viewPlanBlock(id) {
   const b = S.plan.blocks.find((x) => x.id === id);
   if (!b) return '<a class="btn ghost" href="#/plan">‹ Plan</a><p>Block nicht gefunden.</p>';
   if (!S.ui.bd || S.ui.bd.id !== id) {
-    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: b.roundRest === null || b.roundRest === undefined || b.roundRest === '' ? (b.mode === 'circuit' ? '60' : '') : String(b.roundRest), minutes: fmtNum(b.minutes ?? 10), note: b.note || '', changeAfter: b.changeAfter === null || b.changeAfter === undefined || b.changeAfter === '' ? '' : String(b.changeAfter) };
+    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: b.roundRest === null || b.roundRest === undefined || b.roundRest === '' ? (b.mode === 'circuit' ? '60' : '') : String(b.roundRest), minutes: fmtNum(b.minutes ?? 10), note: b.note || '', changeAfter: b.changeAfter === null || b.changeAfter === undefined || b.changeAfter === '' ? '' : String(b.changeAfter), switchRest: b.switchRest === null || b.switchRest === undefined || b.switchRest === '' ? '' : String(b.switchRest) };
   }
   const d = S.ui.bd;
   const opt = (v, t, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`;
@@ -568,6 +568,7 @@ function viewPlanBlock(id) {
   if (d.kind === 'timed') h += `<label class="f" for="b-min">Dauer (min)</label><input id="b-min" inputmode="decimal" data-in="bd.minutes" value="${esc(d.minutes)}">
     <label class="f" for="b-note">Hinweis</label><textarea id="b-note" data-in="bd.note">${esc(d.note)}</textarea>`;
   else {
+    if (d.mode === 'single') h += `<label class="f" for="b-sw">Wechselzeit zwischen den Übungen (s)</label><input id="b-sw" inputmode="numeric" data-in="bd.switchRest" value="${esc(d.switchRest)}" placeholder="leer = Pause der jeweiligen Übung">`;
     h += `<label class="f" for="b-mode">Ablauf</label><select id="b-mode" data-in="bd.mode" data-rr>${opt('single', 'Einzeln nacheinander', d.mode)}${opt('alternate', 'Abwechselnd (Satzpaare: 30 s Wechsel, Pause nach der Runde)', d.mode)}${opt('superset', 'Supersatz (abwechselnd, Pause erst nach der Runde)', d.mode)}${opt('circuit', 'Zirkel (feste Rundenzahl)', d.mode)}</select>
       <p class="sm muted">Abwechselnd und Supersatz: Übung 1 Satz 1, Übung 2 Satz 1, Übung 1 Satz 2 … Reihenfolge der Übungen im Plan festlegen. Zirkel: alle Übungen je Runde, Pause nach der Runde.</p>`;
     if (d.mode === 'alternate') h += `<label class="f" for="b-rr">Pause nach der Runde (s)</label><input id="b-rr" inputmode="numeric" data-in="bd.roundRest" value="${esc(d.roundRest)}" placeholder="leer = Pause der letzten Übung der Runde">
@@ -808,6 +809,7 @@ const ACT = {
     if (d.kind === 'timed' && (b.items || []).length) { toast('Der Block enthält Übungen. Verschiebe oder lösche sie zuerst.'); return; }
     Object.assign(b, { name: d.name.trim(), start, end, kind: d.kind, changeAfter: parseNum(d.changeAfter) });
     if (d.kind === 'timed') Object.assign(b, { minutes: parseNum(d.minutes) ?? 1, note: d.note.trim(), mode: 'single' });
+    else if (d.mode === 'single') Object.assign(b, { mode: d.mode, switchRest: parseNum(d.switchRest) });
     else if (d.mode === 'alternate') {
       Object.assign(b, { mode: d.mode, roundRest: parseNum(d.roundRest) }); // null = Pause der letzten Übung
     } else Object.assign(b, { mode: d.mode, rounds: Math.max(1, parseNum(d.rounds) || 1), roundRest: parseNum(d.roundRest) ?? 60 });

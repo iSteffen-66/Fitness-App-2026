@@ -32,7 +32,7 @@ Dann `http://localhost:8080` öffnen. (Service Worker und Wake Lock funktioniere
 ## Tests
 
 ```
-node --test tests/logic.test.js                      # Datenlogik, 42 Tests
+node --test tests/logic.test.js                      # Datenlogik, 44 Tests
 npm start &                                          # Webserver auf Port 8080
 NODE_PATH=$(npm root -g) node tests/e2e.mjs          # Oberfläche im Handy-Viewport, offline, Export/Import, Timer
 ```
@@ -76,7 +76,21 @@ Zwischen zwei Blöcken läuft automatisch eine **Wechselzeit von 1 Minute** (Anz
 - Die Zeitfenster der Blöcke enthalten die Wechselzeiten. Nach Änderungen „Zeiten lückenlos“ tippen.
 - Pläne ohne eigene Angabe (z. B. ältere Sicherungen) nutzen ebenfalls 1 Minute.
 
-Ausgangsplan: Block „C Freie Gewichte“ wechselt Scott-Curl (SZ-Stange) und Trizepsdrücken am Seil ab (je 2 × 10), danach folgt der Block „C Plank“ (2 × 60 s halten). Gesamtdauer mit Wechselzeiten: 90 Minuten.
+Ausgangsplan (Gesamtdauer mit Wechselzeiten 74 Minuten):
+
+| Block | Übungen | Ablauf |
+|---|---|---|
+| Cardio Aufwärmen | – | 10 min |
+| A Roter Käfig | 1 Bankdrücken, 2 Enges Rudern, 3 Latzug, 14 Bauch schräg | nacheinander, 30 s Wechsel zwischen den Übungen |
+| B Zirkeltraining | 4 Schulterdrücken, 5 Butterfly, 6 Reverse Butterfly, 11 Waden | Zirkel, 2 Runden, 60 s nach jeder Runde |
+| C Freie Gewichte | 7 Scott-Curl (SZ-Stange), 8 Trizepsdrücken am Seil | abwechselnd, je 2 × 10 |
+| C Plank | 15 Plank | 2 × 60 s halten |
+| D Zirkel | 13 Bauchmaschine, 12 Bauch ohne Gewicht | Zirkel, 2 Runden |
+| Puffer, Ausklang | – | 1 min, 10 min |
+
+Die Übungen 9 (Kabel einarmig) und 10 (Kabel-Butterfly) sind nicht mehr im Plan. Ihre Fotos bleiben in der App und lassen sich bei Bedarf über eine neue Übung wieder nutzen.
+
+**Wechselzeit zwischen den Übungen eines Blocks** (Ablauf „nacheinander“): Block antippen → „Wechselzeit zwischen den Übungen“. Sie ersetzt nach dem letzten Satz einer Übung deren normale Pause; die Anzeige lautet dann „Wechsel → nächste Übung“. Leer = Pause der Übung wie bisher.
 
 ## Übungen abwechselnd trainieren
 
