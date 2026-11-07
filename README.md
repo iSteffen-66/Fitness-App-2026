@@ -32,7 +32,7 @@ Dann `http://localhost:8080` öffnen. (Service Worker und Wake Lock funktioniere
 ## Tests
 
 ```
-node --test tests/logic.test.js                      # Datenlogik, 45 Tests
+node --test tests/logic.test.js                      # Datenlogik, 49 Tests
 npm start &                                          # Webserver auf Port 8080
 NODE_PATH=$(npm root -g) node tests/e2e.mjs          # Oberfläche im Handy-Viewport, offline, Export/Import, Timer
 ```
