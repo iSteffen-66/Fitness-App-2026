@@ -30,6 +30,17 @@ const shot = (n) => page.screenshot({ path: path.join(SHOTS, n + '.png') });
 const go = async (h) => { await page.evaluate((x) => { location.hash = x; }, h); await page.waitForTimeout(150); };
 const tapAct = (a, opt = {}) => page.locator(`[data-act="${a}"]`).first().click(opt);
 const modalOk = () => page.locator('#modal [data-m="ok"]').click();
+// Testvorlage: Ausgangsplan bis 07.11.2026 (Mechanik-Tests unabhängig vom aktuellen Ausgangsplan)
+const PREV_PLAN = JSON.parse(fs.readFileSync(new URL('./fixtures/ausgangsplan-bis-2026-11-07.json', import.meta.url), 'utf8'));
+const TESTPLAN = path.join(SHOTS, 'testplan-vorher.json');
+fs.writeFileSync(TESTPLAN, JSON.stringify({ app: 'fitness-app-2026', kind: 'plan', version: 1, exportedAt: Date.now(), plan: PREV_PLAN }));
+async function useTestPlan(pg) {
+  await pg.evaluate(() => { location.hash = '#/backup'; });
+  await pg.waitForSelector('[data-planimport]', { state: 'attached' });
+  await pg.setInputFiles('[data-planimport]', TESTPLAN);
+  await pg.locator('#modal [data-m="ok"]').click(); await pg.waitForTimeout(300);
+  await pg.evaluate(() => { location.hash = '#/'; }); await pg.waitForSelector('[data-act="start"]');
+}
 
 console.log('1. Laden, Service Worker');
 await page.goto(URL_);
@@ -38,6 +49,8 @@ await page.evaluate(() => navigator.serviceWorker.ready);
 await page.waitForFunction(async () => (await caches.keys()).length > 0 && (await (await caches.open((await caches.keys())[0])).keys()).length > 20);
 ok(true, 'Service Worker aktiv, Dateien zwischengespeichert');
 await hscroll('Start'); await shot('01-start');
+eq(await page.evaluate(() => __app.S.plan.blocks.map((b) => b.name).join(' | ')), 'Cardio Aufwärmen | A Roter Käfig | B freie Gewichte | B Plank | C Beine knieschonend | D Zirkelmaschinen | Ausklang', 'Ausgangsplan = Steffens Plan');
+await useTestPlan(page);
 
 console.log('2. Training komplett durchklicken');
 await page.locator('[data-act="start"]').click();
@@ -141,7 +154,9 @@ await tapAct('align'); await page.waitForTimeout(150);
 eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 80, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 80 min');
 await page.locator('[data-act="resetPlan"]').click(); await modalOk(); await page.waitForTimeout(200);
 eq(await page.evaluate(() => __app.S.plan.exercises[1].name), 'Bankdrücken liegend', 'Plan zurückgesetzt');
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 77, 'Gesamtdauer wieder 77 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 89, 'Zurückgesetzt auf Steffens Plan: 89 min');
+eq(await page.evaluate(() => __app.S.plan.exercises[2].name), 'Arm ziehen', 'Zurückgesetzt: eigene Bezeichnungen (Arm ziehen)');
+await useTestPlan(page);
 
 console.log('5. Eigenes Foto');
 if (OWN_PHOTO) {
@@ -240,6 +255,7 @@ console.log('7b. Gerät belegt: später, vorziehen, auslassen und nachholen');
   const q = await cx.newPage();
   q.on('pageerror', (e) => errors.push(e.message));
   await q.goto(URL_); await q.waitForSelector('[data-act="start"]');
+  await useTestPlan(q);
   await q.click('[data-act="start"]'); await q.waitForSelector('#timerSec');
   await q.click('[data-act="done"]'); await q.waitForSelector('#in-reps');
   const h1 = () => q.locator('h1').first().innerText();
@@ -283,6 +299,7 @@ console.log('8. Timer nach Display-aus (2 min) – simulierte Uhr');
 const p2 = await ctx.newPage();
 await p2.clock.install({ time: new Date('2026-11-02T10:00:00') });
 await p2.goto(URL_); await p2.waitForSelector('[data-act="start"]');
+await useTestPlan(p2);
 await p2.locator('[data-act="start"]').click(); await p2.waitForSelector('#timerSec');
 await p2.clock.runFor(1000);
 await p2.clock.fastForward(120_000);   // Display 2 Minuten aus: keine Ticks, Zeit springt
@@ -304,9 +321,8 @@ await p2.close();
 
 console.log('9. Modus „alternate“: Testplan B freie Gewichte (SZ 3, Tri 3, Plank 2)');
 {
-  const { defaultPlan } = await import('../app/js/seed.js');
   const L = await import('../app/js/logic.js');
-  const plan = defaultPlan();
+  const plan = structuredClone(PREV_PLAN);
   plan.exercises[7].sets = [1, 2, 3].map(() => ({ reps: 10, weight: 5 }));
   plan.exercises[8].sets = [1, 2, 3].map(() => ({ reps: 10, weight: 25 }));
   plan.exercises[15] = { id: 15, name: 'Plank', device: 'Matte', tech: 'Körper gerade', photo: null, warmup: null,

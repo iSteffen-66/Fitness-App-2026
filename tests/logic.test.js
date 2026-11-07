@@ -11,6 +11,9 @@ const T0 = 1_700_000_000_000;
 // Bisheriger Ausgangsplan (vor Wechselzeiten), ohne Wechselzeit: prüft die Mechanik unabhängig vom aktuellen Plan.
 const FIX = JSON.parse(fs.readFileSync(new URL('./fixtures/steps-vorher.json', import.meta.url), 'utf8'));
 const oldPlan = () => ({ ...structuredClone(FIX.plan), blockChange: 0 });
+// Ausgangsplan bis 07.11.2026 (Roter Käfig, Zirkel usw.): Testvorlage für Wechselzeiten, Abwechselnd und Zirkel
+const PREV = JSON.parse(fs.readFileSync(new URL('./fixtures/ausgangsplan-bis-2026-11-07.json', import.meta.url), 'utf8'));
+const prevPlan = () => structuredClone(PREV);
 const stripChange = (steps) => JSON.parse(JSON.stringify(steps, (k, v) => (k === 'changeAfter' ? undefined : v)));
 const finishAll = (a, now = T0, vals = (s) => ({ reps: s.reps, weight: s.weight ?? 20 })) => {
   let t = now;
@@ -577,7 +580,7 @@ test('Alte Modi: Auslassen beendet die laufende Pause wie bisher', () => {
 
 // ---------- Wechselzeit zwischen Blöcken und neuer Ausgangsplan ----------
 test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining, freie Gewichte, Plank, Zirkel D mit Beinpresse/Beinbeuger; 9 und 10 entfallen', () => {
-  const p = defaultPlan();
+  const p = prevPlan();
   const by = Object.fromEntries(p.blocks.map((b) => [b.name, b]));
   assert.deepEqual(p.blocks.map((b) => b.name), ['Cardio Aufwärmen', 'A Roter Käfig', 'B Zirkeltraining', 'C Freie Gewichte', 'C Plank', 'D Zirkel', 'Puffer', 'Ausklang']);
   assert.deepEqual(by['A Roter Käfig'].items, [1, 2, 3, 14]);
@@ -603,11 +606,11 @@ test('Neuer Ausgangsplan: Roter Käfig, Zirkeltraining, freie Gewichte, Plank, Z
 });
 
 test('Roter Käfig: 30 s Wechsel zwischen den Übungen, Satzpausen unverändert', () => {
-  const st = L.buildSteps(defaultPlan()).filter((s) => s.blockId === 'b02');
+  const st = L.buildSteps(prevPlan()).filter((s) => s.blockId === 'b02');
   const k = (s) => `${s.exId}${s.setType === 'warmup' ? 'w' : ''}${s.side ? s.side[0] : ''}:${s.rest}`;
   assert.deepEqual(st.map(k), ['1w:30', '1:90', '1:30', '2w:30', '2:90', '2:30', '3w:30', '3:90', '3:30', '14l:0', '14r:60', '14l:0', '14r:0']);
   // im Training: Wechsel-Anzeige mit nächster Übung
-  const a = L.newActive(defaultPlan(), T0);
+  const a = L.newActive(prevPlan(), T0);
   doCur(a); doCur(a); doCur(a); doCur(a);      // Cardio, 1w, 1, 1 (letzter Satz)
   assert.equal(a.rest.total, 30);
   assert.equal(a.rest.toEx, 'Enges Rudern');
@@ -625,7 +628,7 @@ test('Wechselzeit zwischen Übungen: leer = wie bisher, 0 = direkt weiter', () =
 });
 
 test('Wechselzeit: 1 min zwischen allen Blöcken, auch Freie Gewichte → Plank → nächster Block', () => {
-  const p = defaultPlan();
+  const p = prevPlan();
   const a = L.newActive(p, T0);
   const log = []; let t = T0;
   while (L.currentStep(a)) {
@@ -667,12 +670,12 @@ test('Wechselzeit: je Block überschreibbar, 0 = direkt weiter; Pläne ohne Anga
 });
 
 test('Wechselzeit: auch beim Vorziehen über Blockgrenzen; Auslassen beendet sie nicht', () => {
-  const a = L.newActive(defaultPlan(), T0);
+  const a = L.newActive(prevPlan(), T0);
   L.completeStep(a, { actualSec: 600 }, T0);      // Cardio → Wechselzeit 60 s läuft
   assert.ok(a.rest.change);
   L.skipCurrent(a, T0 + 5000);                    // erste Übung im Roten Käfig auslassen: Weg läuft weiter
   assert.equal(L.remainingSec(a.rest.endAt, T0 + 5000), 55);
-  const a2 = L.newActive(defaultPlan(), T0);
+  const a2 = L.newActive(prevPlan(), T0);
   doCur(a2);
   L.bringToFront(a2, 'b:b06', T0);                // Zirkeltraining B vorgezogen
   while (L.currentStep(a2).blockId === 'b06') doCur(a2, T0);
@@ -690,9 +693,9 @@ test('Zeiten lückenlos berücksichtigt Wechselzeiten', () => {
 });
 
 test('Zirkel D: Beinpresse und Beinbeuger in jeder Runde, Gewicht beim ersten Satz wird Soll', () => {
-  const st = L.buildSteps(defaultPlan()).filter((s) => s.blockId === 'b10' && s.setType === 'work');
+  const st = L.buildSteps(prevPlan()).filter((s) => s.blockId === 'b10' && s.setType === 'work');
   assert.deepEqual(st.map((s) => `${s.exId}/${s.round}`), ['13/1', '16/1', '17/1', '12/1', '13/2', '16/2', '17/2', '12/2']);
-  const a = L.newActive(defaultPlan(), T0);
+  const a = L.newActive(prevPlan(), T0);
   while (L.currentStep(a).exId !== 16) doCur(a);
   assert.equal(L.currentStep(a).weight, null);
   const r = L.completeStep(a, { reps: 10, weight: 80 }, T0);
@@ -714,4 +717,49 @@ test('Plan-Datei ohne Fotos: vorhandene eigene Fotos bleiben erhalten', async ()
   assert.deepEqual(await store.getPhotos(), cur);
   // Datei mit (leeren) Fotos verhält sich wie bisher: Standardbilder für Planübungen
   assert.deepEqual(L.mergePlanPhotos(cur, p, {}), {});
+});
+
+// ---------- Ausgangsplan = Steffens Plan (Stand 07.11.2026) ----------
+test('Ausgangsplan entspricht Steffens Plan vom 07.11.', () => {
+  const p = defaultPlan();
+  assert.deepEqual(p.blocks.map((b) => `${b.name}:${b.mode}:${(b.items || []).join('-')}`), [
+    'Cardio Aufwärmen:single:', 'A Roter Käfig:single:1-2-3-14', 'B freie Gewichte:alternate:7-8', 'B Plank:single:19',
+    'C Beine knieschonend:single:11-16-18-17', 'D Zirkelmaschinen:single:5-4-6-15-20', 'Ausklang:single:']);
+  assert.deepEqual(Object.keys(p.exercises).map(Number), [1, 2, 3, 4, 5, 6, 7, 8, 11, 14, 15, 16, 17, 18, 19, 20]);
+  assert.equal(p.exercises[2].name, 'Arm ziehen');
+  assert.equal(p.exercises[15].name, 'Rückenstrecker');
+  assert.equal(p.exercises[19].name, 'Unterarmstütz (Plank)');
+  // eigene Fotos nicht im Ausgangsplan (bleiben auf dem Gerät), Standardbilder schon
+  assert.ok([15, 16, 17, 18, 19, 20].every((id) => p.exercises[id].photo === null));
+  assert.equal(p.exercises[1].photo, 'img/01.webp');
+  assert.equal(L.planTotalMinutes(p), 89);
+  assert.equal(L.validateImport(L.buildExport(p, [], {})).ok, true);
+  assert.notStrictEqual(defaultPlan(), defaultPlan()); // jedes Mal eine eigene Kopie
+});
+
+test('Ausgangsplan: Roter Käfig 1 min, Zirkelmaschinen alle Sätze am Gerät und 30 s Wechsel', () => {
+  const p = defaultPlan();
+  const a = L.newActive(p, T0);
+  const by = {}; let t = T0;
+  while (L.currentStep(a)) {
+    const s = L.currentStep(a);
+    L.completeStep(a, s.type === 'timed' ? { actualSec: 60 } : { reps: s.reps, weight: s.weight ?? 0 }, t);
+    const lbl = s.type === 'timed' ? 'T' : `${s.exId}${s.setType === 'warmup' ? 'w' : ''}`;
+    (by[s.blockName] ||= []).push(`${lbl}:${a.rest ? (a.rest.change ? 'W' : a.rest.toEx ? 'X' : '') + a.rest.total : 0}`);
+    t += 1000;
+  }
+  assert.deepEqual(by['A Roter Käfig'], ['1:45', '1:45', '1:X60', '2:45', '2:45', '2:X60', '3:45', '3:45', '3:X60', '14:45', '14:45', '14:45', '14:W60']);
+  assert.deepEqual(by['D Zirkelmaschinen'], ['5:30', '5:X30', '4w:30', '4:45', '4:X30', '6w:30', '6:30', '6:X30', '15:45', '15:X30', '20:45', '20:W60']);
+  assert.deepEqual(by['B freie Gewichte'], ['7:30', '8:30', '7:30', '8:30', '7:30', '8:W60']);
+});
+
+test('Plan zurücksetzen lässt eigene Fotos und Verlauf unverändert', async () => {
+  const store = createStore(memoryAdapter());
+  await store.savePhoto(19, 'data:image/jpeg;base64,PLANK');
+  await store.saveSession({ id: 's1', startedAt: T0, entries: [] });
+  await store.savePlan({ ...defaultPlan(), blocks: [] });
+  const p = await store.resetPlan();
+  assert.equal(p.blocks.length, 7);
+  assert.deepEqual(await store.getPhotos(), { 19: 'data:image/jpeg;base64,PLANK' });
+  assert.equal((await store.listSessions()).length, 1);
 });

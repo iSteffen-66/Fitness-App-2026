@@ -1,72 +1,583 @@
-// Ausgangsplan nach PROMPT.md, ergänzt um 1 min Wechselzeit zwischen den Blöcken. Übungsnummer = feste ID (gehört zum Foto).
-import { realignTimes } from './logic.js';
-
+// Ausgangsplan = Steffens Trainingsplan (Stand 07.11.2026, vom iPhone übernommen).
+// Übungsnummer = feste ID (gehört zum Foto und zum Verlauf), Reihenfolge im Plan ist davon unabhängig.
+// Eigene Fotos (Übungen 15–20) liegen nur auf dem Gerät und bleiben beim Zurücksetzen erhalten.
+// Der frühere Ausgangsplan liegt als Testvorlage in tests/fixtures/ausgangsplan-bis-2026-11-07.json.
 export const PLAN_VERSION = 1;
 
-const ex = (id, name, device, tech, o) => ({
-  id, name, device, tech,
-  photo: o.noPhoto ? null : `img/${String(id).padStart(2, '0')}.webp`,
-  warmup: o.warmup || null,
-  sets: o.sets,
-  unit: o.unit ?? 'kg',
-  sides: o.sides || 'none',
-  rest: o.rest ?? 60,
-  warmRest: 30,
-  step: o.step ?? null,
-  optional: !!o.optional,
-});
-const sets = (n, reps, weight) => Array.from({ length: n }, () => ({ reps, weight }));
+const PLAN = {
+  "version": 1,
+  "blocks": [
+    {
+      "id": "b01",
+      "name": "Cardio Aufwärmen",
+      "start": 0,
+      "end": 10,
+      "kind": "timed",
+      "mode": "single",
+      "items": [],
+      "minutes": 10,
+      "note": "Rad oder Crosstrainer, locker bis mittel; Laufband nur gehen, nicht laufen"
+    },
+    {
+      "id": "b02",
+      "name": "A Roter Käfig",
+      "start": 11,
+      "end": 29,
+      "kind": "sets",
+      "mode": "single",
+      "items": [
+        1,
+        2,
+        3,
+        14
+      ],
+      "rounds": 1,
+      "roundRest": 60,
+      "switchRest": 60
+    },
+    {
+      "id": "b09",
+      "name": "B freie Gewichte",
+      "start": 30,
+      "end": 43,
+      "kind": "sets",
+      "mode": "alternate",
+      "items": [
+        7,
+        8
+      ],
+      "rounds": 1,
+      "roundRest": null
+    },
+    {
+      "id": "b09p",
+      "name": "B Plank",
+      "start": 44,
+      "end": 46,
+      "kind": "sets",
+      "mode": "single",
+      "items": [
+        19
+      ]
+    },
+    {
+      "id": "b13",
+      "name": "C Beine knieschonend",
+      "start": 47,
+      "end": 62,
+      "kind": "sets",
+      "mode": "single",
+      "items": [
+        11,
+        16,
+        18,
+        17
+      ],
+      "rounds": 1,
+      "roundRest": 60
+    },
+    {
+      "id": "b04",
+      "name": "D Zirkelmaschinen",
+      "start": 63,
+      "end": 78,
+      "kind": "sets",
+      "mode": "single",
+      "items": [
+        5,
+        4,
+        6,
+        15,
+        20
+      ],
+      "switchRest": 30
+    },
+    {
+      "id": "b12",
+      "name": "Ausklang",
+      "start": 79,
+      "end": 89,
+      "kind": "timed",
+      "mode": "single",
+      "items": [],
+      "minutes": 10,
+      "note": "3 Min. Cardio locker (Rad/Crosstrainer), danach Brust, Schulter, Waden, Oberschenkelvorderseite und Hüftbeuger dehnen"
+    }
+  ],
+  "exercises": {
+    "1": {
+      "id": 1,
+      "name": "Bankdrücken liegend",
+      "device": "Bank liegend mit Scheiben",
+      "tech": "Schulterblätter zusammen, Füße fest",
+      "photo": "img/01.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 10,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 10,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 10,
+          "text": ""
+        }
+      ],
+      "unit": "kg je Seite",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 1.25,
+      "optional": false
+    },
+    "2": {
+      "id": 2,
+      "name": "Arm ziehen",
+      "device": "Zugmaschine",
+      "tech": "",
+      "photo": "img/02.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 25,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 25,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 25,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false
+    },
+    "3": {
+      "id": 3,
+      "name": "Enges Rudern",
+      "device": "",
+      "tech": "",
+      "photo": "img/03.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 20,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 20,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 20,
+          "text": ""
+        }
+      ],
+      "unit": "kg je Seite",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 1.25,
+      "optional": false
+    },
+    "4": {
+      "id": 4,
+      "name": "Schulterdrücken",
+      "device": "Schulterpresse",
+      "tech": "Rücken fest ans Polster; nur wenn Zeit übrig",
+      "photo": "img/04.webp",
+      "warmup": {
+        "reps": 10,
+        "weight": 20,
+        "text": ""
+      },
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 30,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 30,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": true
+    },
+    "5": {
+      "id": 5,
+      "name": "Butterfly",
+      "device": "Butterfly-Maschine",
+      "tech": "Fingerspitzen vorne zusammen, Rücken anlegen; nur wenn Zeit übrig",
+      "photo": "img/05.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 40,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 40,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 30,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": true
+    },
+    "6": {
+      "id": 6,
+      "name": "Reverse Butterfly",
+      "device": "Reverse-Butterfly-Maschine",
+      "tech": "Arme weit nach hinten, Schultern tief",
+      "photo": "img/06.webp",
+      "warmup": {
+        "reps": 10,
+        "weight": 20,
+        "text": ""
+      },
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 30,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 30,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 30,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false
+    },
+    "7": {
+      "id": 7,
+      "name": "SZ-Stange",
+      "device": "mit oder ohne Scott-Bank mit SZ-Stange",
+      "tech": "Oberarme ganz aufs Polster, langsam ablassen",
+      "photo": "img/07.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 5,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 5,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 5,
+          "text": ""
+        }
+      ],
+      "unit": "kg je Seite",
+      "sides": "none",
+      "rest": 30,
+      "warmRest": 30,
+      "step": 1.25,
+      "optional": false
+    },
+    "8": {
+      "id": 8,
+      "name": "Trizepsdrücken am Seil",
+      "device": "Kabelturm mit Seilgriff",
+      "tech": "Ellbogen am Körper, Seil bis unter die Hüfte",
+      "photo": "img/08.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 25,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 25,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 25,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 30,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false
+    },
+    "11": {
+      "id": 11,
+      "name": "Waden sitzend oder stehend",
+      "device": "Wadenmaschine sitzend",
+      "tech": "Ganz runter, ganz hoch, oben kurz halten;",
+      "photo": "img/11.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 15,
+          "weight": 15,
+          "text": ""
+        },
+        {
+          "reps": 15,
+          "weight": 15,
+          "text": ""
+        },
+        {
+          "reps": 15,
+          "weight": 15,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false
+    },
+    "14": {
+      "id": 14,
+      "name": "Bauch schräg (Winkel links/rechts verstellbar)",
+      "device": "Bauchmaschine schräg",
+      "tech": "Becken fixiert, Drehung aus dem Rumpf, Winkel je Seite umstellen",
+      "photo": "img/14.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 10,
+          "text": "gerade"
+        },
+        {
+          "reps": 10,
+          "weight": 10,
+          "text": "links"
+        },
+        {
+          "reps": 10,
+          "weight": 10,
+          "text": "rechts"
+        },
+        {
+          "reps": 10,
+          "weight": 10,
+          "text": "gerade"
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false
+    },
+    "15": {
+      "name": "Rückenstrecker",
+      "device": "Rückenstrecker-Maschine",
+      "tech": "Becken fixiert, langsam aus dem unteren Rücken strecken, nicht überstrecken",
+      "photo": null,
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 20,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 20,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false,
+      "id": 15
+    },
+    "16": {
+      "id": 16,
+      "name": "Beinpresse",
+      "device": "Beinpresse",
+      "tech": "Knie max. 90° beugen, Knie in Linie mit Fußspitzen, oben nicht durchstrecken, nur schmerzfrei",
+      "photo": null,
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 15,
+          "weight": 30,
+          "text": ""
+        },
+        {
+          "reps": 15,
+          "weight": 30,
+          "text": ""
+        },
+        {
+          "reps": 15,
+          "weight": 30,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 30,
+      "warmRest": 30,
+      "step": 5,
+      "optional": false
+    },
+    "17": {
+      "id": 17,
+      "name": "Beinbeuger",
+      "device": "Beinbeuger sitzend oder liegend",
+      "tech": "Langsam beugen, kontrolliert zurück, Polster knapp über der Ferse",
+      "photo": null,
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 12,
+          "weight": 30,
+          "text": ""
+        },
+        {
+          "reps": 12,
+          "weight": 30,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false
+    },
+    "18": {
+      "id": 18,
+      "name": "Abduktoren",
+      "device": "Abduktoren-Maschine",
+      "tech": "Beine nach außen drücken, Rücken anlegen, langsam zurück",
+      "photo": null,
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 15,
+          "weight": 30,
+          "text": ""
+        },
+        {
+          "reps": 15,
+          "weight": 30,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": 2.5,
+      "optional": false
+    },
+    "19": {
+      "id": 19,
+      "name": "Unterarmstütz (Plank)",
+      "device": "Matte",
+      "tech": "Körper gerade Linie, Bauch und Gesäß fest, ruhig weiteratmen; Füße auf Platte, Kopf nach oben durchstrecken- 5 s halten",
+      "photo": null,
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": null,
+          "text": "Sek."
+        },
+        {
+          "reps": 10,
+          "weight": null,
+          "text": "Sek."
+        }
+      ],
+      "unit": "",
+      "sides": "none",
+      "rest": 30,
+      "warmRest": 30,
+      "step": null,
+      "optional": false
+    },
+    "20": {
+      "name": "Bauchmuskel",
+      "device": "",
+      "tech": "",
+      "photo": null,
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 15,
+          "weight": 30,
+          "text": ""
+        },
+        {
+          "reps": 15,
+          "weight": 30,
+          "text": ""
+        }
+      ],
+      "unit": "kg",
+      "sides": "none",
+      "rest": 45,
+      "warmRest": 30,
+      "step": null,
+      "optional": false,
+      "id": 20
+    }
+  },
+  "blockChange": 60
+};
 
 export function defaultPlan() {
-  const exercises = {};
-  [
-    ex(1, 'Bankdrücken liegend', 'Bank liegend mit Scheiben', 'Schulterblätter zusammen, Füße fest',
-      { unit: 'kg je Seite', rest: 90, warmup: { reps: 10, weight: 0, text: 'ohne Scheiben' }, sets: sets(2, 10, 10) }),
-    ex(2, 'Enges Rudern', 'Rudermaschine mit Brustpolster', 'Sitzhöhe Stufe 3, Brust ans Polster',
-      { rest: 90, warmup: { reps: 10, weight: 7.5 }, sets: sets(2, 10, 15) }),
-    ex(3, 'Latzug', 'Latzug-Maschine (Griffe von oben)', 'Beine einklemmen, nur Fingerspitzen, zur Brust ziehen',
-      { unit: 'kg je Seite', rest: 90, warmup: { reps: 10, weight: 15 }, sets: sets(2, 10, 20) }),
-    ex(4, 'Schulterdrücken', 'Schulterpresse', 'Rücken fest ans Polster',
-      { rest: 90, warmup: { reps: 10, weight: 20 }, sets: sets(2, 10, 30) }),
-    ex(5, 'Butterfly', 'Butterfly-Maschine', 'Fingerspitzen vorne zusammen, Rücken anlegen',
-      { warmup: { reps: 10, weight: 20 }, sets: sets(2, 10, 40) }),
-    ex(6, 'Reverse Butterfly', 'Reverse-Butterfly-Maschine', 'Arme weit nach hinten, Schultern tief',
-      { warmup: { reps: 10, weight: 20 }, sets: sets(2, 10, 30) }),
-    ex(7, 'Scott-Curl SZ-Stange', 'Scott-Bank mit SZ-Stange', 'Oberarme ganz aufs Polster, langsam ablassen',
-      { unit: 'kg je Seite', warmup: { reps: 15, weight: 0, text: '5 × unten bis Mitte, 5 × Mitte bis oben, 5 × voll, ohne Scheiben' },
-        sets: sets(2, 10, 5) }),
-    ex(8, 'Trizepsdrücken am Seil', 'Kabelturm mit Seilgriff', 'Ellbogen am Körper, Seil bis unter die Hüfte',
-      { warmup: { reps: 10, weight: 10 }, sets: sets(2, 10, 25) }),
-    ex(11, 'Waden sitzend', 'Wadenmaschine sitzend', 'Ganz runter, ganz hoch',
-      { unit: '', sets: [{ reps: 20, weight: null }] }),
-    ex(12, 'Bauch ohne Gewicht', 'Matte / Boden', 'Lendenwirbelsäule am Boden',
-      { unit: '', noPhoto: true, sets: [{ reps: 10, weight: null, text: '10 gerade, je 10 links/rechts, 10 gerade' }] }),
-    ex(13, 'Bauchmaschine', 'Bauchmaschine mit Fußrolle', 'Aus dem Bauch einrollen',
-      { warmup: { reps: 10, weight: 20 }, sets: sets(2, 10, 40) }),
-    ex(14, 'Bauch schräg (Winkel links/rechts verstellbar)', 'Bauchmaschine schräg', 'Becken fixiert, Drehung aus dem Rumpf, Winkel je Seite umstellen',
-      { sides: 'Seite', sets: sets(2, 10, null) }),
-    // Beinpresse und Beinbeuger (Zirkel D): Werte aus dem alten Plan nicht verfügbar → Gewicht offen (erster Satz wird Soll)
-    ex(16, 'Beinpresse', 'Beinpresse', 'Füße hüftbreit auf der Platte, Knie nicht ganz durchstrecken',
-      { unit: 'kg', noPhoto: true, sets: sets(2, 10, null) }),
-    ex(17, 'Beinbeuger', 'Beinbeuger-Maschine', 'Becken fest am Polster, langsam ablassen',
-      { unit: 'kg', noPhoto: true, sets: sets(2, 10, null) }),
-    ex(15, 'Plank', 'Matte / Boden', 'Körper gerade, Bauch und Po fest, nicht durchhängen',
-      { unit: '', noPhoto: true, rest: 45, sets: [{ reps: 1, weight: null, text: '60 s halten' }, { reps: 1, weight: null, text: '60 s halten' }] }),
-  ].forEach((e) => { exercises[e.id] = e; });
-
-  const B = (id, name, start, end, o) => ({ id, name, start, end, kind: 'sets', mode: 'single', items: [], ...o });
-  const blocks = [
-    B('b01', 'Cardio Aufwärmen', 0, 10, { kind: 'timed', minutes: 10, note: 'Rad, Crosstrainer oder Laufband, locker bis mittel' }),
-    // Roter Käfig: alle Geräte im selben Bereich, daher nur 30 s Wechsel zwischen den Übungen
-    B('b02', 'A Roter Käfig', 0, 19, { items: [1, 2, 3, 14], switchRest: 30 }),
-    B('b06', 'B Zirkeltraining', 0, 10, { mode: 'circuit', rounds: 2, roundRest: 60, items: [4, 5, 6, 11] }),
-    // Freie Gewichte: Stange und Seilzug abwechselnd, Plank als eigener Block direkt dahinter
-    B('b08', 'C Freie Gewichte', 0, 8, { mode: 'alternate', items: [7, 8], roundRest: null }),
-    B('b08p', 'C Plank', 0, 3, { items: [15] }),
-    B('b10', 'D Zirkel', 0, 9, { mode: 'circuit', rounds: 2, roundRest: 60, items: [13, 16, 17, 12] }),
-    B('b11', 'Puffer', 0, 1, { kind: 'timed', minutes: 1, note: 'Wechselzeit, Trinken' }),
-    B('b12', 'Ausklang', 0, 10, { kind: 'timed', minutes: 10, note: 'Cardio locker, danach Brust, Schulter und Waden dehnen' }),
-  ];
-  // Zeitfenster inkl. Wechselzeiten (1 min zwischen den Blöcken) lückenlos berechnen
-  return realignTimes({ version: PLAN_VERSION, blockChange: 60, blocks, exercises });
+  return JSON.parse(JSON.stringify(PLAN));
 }
