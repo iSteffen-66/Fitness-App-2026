@@ -96,6 +96,13 @@ export function createStore(adapter) {
       for (const s of sessions) await adapter.sessionPut(s);
       for (const [k, v] of Object.entries(photos || {})) await adapter.photoPut(k, v);
     },
+    /** Nur Plan und zugehörige Fotos ersetzen; Verlauf und Sicherungsdatum bleiben. */
+    async replacePlan(plan, photos) {
+      const old = await adapter.photosAll();
+      for (const k of Object.keys(old)) if (!(k in photos)) await adapter.photoDel(k);
+      for (const [k, v] of Object.entries(photos)) if (old[k] !== v) await adapter.photoPut(k, v);
+      await adapter.kvSet('plan', plan);
+    },
     async wipe() { await adapter.clearAll(); },
   };
 }

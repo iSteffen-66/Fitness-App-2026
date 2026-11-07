@@ -33,7 +33,8 @@ function modal(html) {
           const o = {};
           m.querySelectorAll('[name]').forEach((i) => { o[i.name] = i.type === 'checkbox' ? i.checked : i.value; });
           close(o);
-        } else close(null);
+        } else if (b.dataset.m === 'x') close(null);
+        else close({ choice: b.dataset.m });
       } else if (e.target === m) close(null);
     };
   });
@@ -91,6 +92,12 @@ const photoHTML = (exId) => {
   const s = photoSrc(exId);
   return `<div class="photo">${s ? `<img src="${esc(s)}" alt="Foto: ${esc(S.plan.exercises[exId]?.name)}">` : ICON_PH}</div>`;
 };
+/** Kleines Vorschaubild für die Planliste (eigenes Foto, Standardbild oder Platzhalter). */
+const thumb = (exId) => {
+  const s = photoSrc(exId);
+  return s ? `<img class="thumb" src="${esc(s)}" alt="">`
+    : `<span class="thumb ph" aria-hidden="true">${ICON_PH.replace('<svg', '<svg style="width:22px;height:22px"')}</span>`;
+};
 const miniPhoto = (exId) => {
   const s = photoSrc(exId);
   return s ? `<img class="mini" src="${esc(s)}" alt="">` : `<div class="mini photo" style="height:64px;min-height:0">${ICON_PH.replace('<svg', '<svg style="width:28px;height:28px"')}</div>`;
@@ -147,9 +154,9 @@ function backupAgeText() {
   const d = Math.floor((Date.now() - t) / 86400000);
   return d === 0 ? 'Zuletzt heute exportiert.' : `Zuletzt vor ${d} Tag${d === 1 ? '' : 'en'} exportiert.`;
 }
-const backupWarn = () => `<div class="card warn"><b>Daten sichern!</b>
+const backupWarn = (link = true) => `<div class="card warn"><b>Daten sichern!</b>
   <p class="sm">Plan, Verlauf und Fotos liegen nur in diesem Browser. Auf dem iPhone kann Safari diese Daten löschen (z. B. bei Speicherplatzmangel oder wenn die App lange nicht geöffnet wurde). Exportiere regelmäßig eine Sicherung.</p>
-  <p class="sm muted">${backupAgeText()}</p><a class="btn ghost" href="#/backup">Zur Sicherung</a></div>`;
+  <p class="sm muted">${backupAgeText()}</p>${link ? '<a class="btn ghost" href="#/backup">Zur Sicherung</a>' : ''}</div>`;
 
 function viewHome() {
   const a = S.active;
@@ -184,15 +191,28 @@ function initForm() {
   } else S.ui.form = { idx: step.index, minutes: '', note: '' };
 }
 
+const fmtSec = (r) => (r >= 60 && r % 60 === 0 ? `${r / 60} min` : `${r} s`);
+function restPreview(a, step, next) {
+  const r = L.restAfter(a, step, next);
+  if (r <= 0) return '';
+  return next.blockId !== step.blockId ? ` (nach ${fmtSec(r)} Wechselzeit)` : ` (nach ${fmtSec(r)} Pause)`;
+}
+const MODE_NAME = { single: 'Einzeln', superset: 'Supersatz', circuit: 'Zirkel', alternate: 'Abwechselnd' };
 function setLabel(step) {
   if (step.setType === 'warmup') return 'Aufwärmsatz';
-  return step.mode === 'single' ? `Arbeitssatz ${step.setNo}/${step.setCount}` : `Runde ${step.round}/${step.rounds}`;
+  if (step.mode === 'single') return `Arbeitssatz ${step.setNo}/${step.setCount}`;
+  return `Runde ${step.round}/${step.rounds}`;
 }
 
 function viewTraining() {
   const a = S.active, now = Date.now();
   const step = L.currentStep(a);
-  if (!step) return '<div class="card">Alle Schritte erledigt.</div><button class="btn" data-act="finishnow">Training abschließen</button>';
+  if (!step) {
+    const open = L.openUnits(a);
+    let e = `<h1>${open.length ? 'Noch offen' : 'Alles erledigt'}</h1>`;
+    if (open.length) e += '<p class="muted">Diese Übungen hast du ausgelassen. Du kannst sie jetzt nachholen oder das Training beenden.</p>' + open.map(unitRow).join('');
+    return e + `<button class="btn ${open.length ? 'ghost' : 'ok'}" style="margin-top:12px" data-act="finishnow">Training abschließen</button>`;
+  }
   if (S.ui.form.idx !== step.index) initForm();
   const f = S.ui.form;
   const blk = a.blocks.find((b) => b.id === step.blockId);
@@ -208,8 +228,8 @@ function viewTraining() {
   }
   if (behind > 0) h += `<div class="card warn sm">Du liegst ${behind} min hinter dem Zeitplan (Block „${esc(step.blockName)}“ sollte um Minute ${fmtNum(blk.end)} fertig sein).</div>`;
   if (a.rest) {
-    h += `<div class="rest"><div class="sm">Pause</div><div class="big" id="restSec">${fmtClock(L.remainingSec(a.rest.endAt, now))}</div>
-      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="rest+">+15 s</button><button class="btn sm" data-act="restskip">Pause beenden</button></div></div>`;
+    h += `<div class="rest"><div class="sm">${a.rest.change ? `Wechselzeit → ${esc(a.rest.toBlock || 'nächster Block')}` : a.rest.toEx ? `Wechsel → ${esc(a.rest.toEx)}` : 'Pause'}</div><div class="big" id="restSec">${fmtClock(L.remainingSec(a.rest.endAt, now))}</div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" data-act="rest+">+15 s</button><button class="btn sm" data-act="restskip">${a.rest.change ? 'Weiter' : 'Pause beenden'}</button></div></div>`;
   }
   if (step.type === 'timed') {
     const t = a.timer, over = now >= t.endAt;
@@ -220,7 +240,8 @@ function viewTraining() {
       <input id="in-min" inputmode="decimal" data-in="form.minutes" value="${esc(f.minutes)}" placeholder="leer = verstrichene Zeit des Timers">
       <label class="f" for="in-note">Gerät / Notiz (optional)</label>
       <input id="in-note" data-in="form.note" value="${esc(f.note)}" placeholder="z. B. Crosstrainer">
-      <div class="cta"><div class="row"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ok" data-act="done">Fertig</button></div></div>`;
+      <div class="cta"><div class="row"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ok" data-act="done">Fertig</button></div></div>
+      <button class="btn ghost" style="margin-top:8px" data-act="order">Später / andere Übung</button>${openHint(a)}`;
     return h;
   }
   const ex = S.plan.exercises[step.exId] || {};
@@ -232,7 +253,7 @@ function viewTraining() {
   h += photoHTML(step.exId);
   h += `<h1>${esc(step.name)}</h1><div class="muted">${esc(ex.device || '')}</div><div style="margin-top:8px">
     <span class="tag ac">${setLabel(step)}</span>${step.side ? `<span class="tag g">${step.side === 'links' ? 'Links' : 'Rechts'}${step.unit === 'kg je Arm' ? ' (Arm)' : ''}</span>` : ''}
-    ${step.mode !== 'single' && step.groupSize > 1 ? `<span class="tag">${step.mode === 'circuit' ? 'Zirkel' : 'Supersatz'} · Übung ${step.groupPos + 1}/${step.groupSize}</span>` : ''}
+    ${step.mode !== 'single' && step.groupSize > 1 ? `<span class="tag">${MODE_NAME[step.mode]} · Übung ${step.groupPos + 1}/${step.groupSize}</span>` : ''}
     ${step.optional ? '<span class="tag w">optional</span>' : ''}${rec ? '<span class="tag g">erfasst</span>' : ''}</div>`;
   if (ex.tech) h += `<p class="sm">${esc(ex.tech)}</p>`;
   h += `<div class="soll">Soll: <b>${step.reps} Wdh.</b>${weighted ? (open ? ' · Gewicht offen' : ` × <b>${fmtNum(step.weight)} ${esc(step.unit)}</b>`) : ''}${step.text ? ` <span class="muted">(${esc(step.text)})</span>` : ''}</div>`;
@@ -246,10 +267,47 @@ function viewTraining() {
       <button class="btn ghost" data-act="adj" data-f="weight" data-d="-${L.stepOf(ex) || 1}" aria-label="weniger">−</button>
       <input id="in-weight" inputmode="decimal" data-in="form.weight" value="${esc(f.weight)}">
       <button class="btn ghost" data-act="adj" data-f="weight" data-d="${L.stepOf(ex) || 1}" aria-label="mehr">+</button></div></div>` : ''}</div>
-    ${next ? `<p class="sm muted">Danach: ${next.type === 'timed' ? esc(next.blockName) : esc(next.name) + (next.side ? ' (' + next.side + ')' : '')}</p>` : ''}
+    ${next ? `<p class="sm muted">Als Nächstes: <b>${next.type === 'timed' ? esc(next.blockName) : esc(next.name)}</b>${next.type === 'set' ? ` · ${next.setType === 'warmup' ? 'Aufwärmsatz' : next.mode === 'single' ? `Satz ${next.setNo}/${next.setCount}` : `Runde ${next.round}/${next.rounds}`}${next.side ? ' · ' + next.side : ''}` : ''}${restPreview(a, step, next)}</p>` : ''}
     <div class="cta"><button class="btn ok" data-act="done">Erledigt</button></div>
-    <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ghost" data-act="skip">Übung überspringen</button></div>`;
+    <div class="row" style="margin-top:8px"><button class="btn ghost" data-act="back">Zurück</button><button class="btn ghost" data-act="order">Gerät belegt?</button></div>
+    ${openHint(a)}`;
   return h;
+}
+
+const unitRow = (u) => `<div class="item"><div class="grow"><div class="t">${esc(u.label)}</div>
+  <div class="s">${u.timed ? 'Zeitblock' : `${u.pending} ${u.pending === 1 ? 'Satz' : 'Sätze'} offen`}${u.timed || u.key.startsWith('b:') ? '' : ' · ' + esc(u.blockName)}${u.skippedNames.length ? ` · <span class="tag w">ausgelassen: ${esc(u.skippedNames.join(', '))}</span>` : ''}</div></div>
+  <button class="btn sm ok" data-act="bring" data-key="${esc(u.key)}">Jetzt</button></div>`;
+function openHint(a) {
+  const n = L.openUnits(a).reduce((k, u) => k + u.skippedNames.length, 0);
+  return n ? `<p class="sm muted" style="margin-top:8px">${n} ausgelassene Übung${n === 1 ? '' : 'en'} – über „${L.currentStep(a)?.type === 'timed' ? 'Später / andere Übung' : 'Gerät belegt?'}“ jederzeit nachholbar.</p>` : '';
+}
+async function orderSheet() {
+  const a = S.active, cur = L.currentStep(a);
+  if (!cur) return;
+  const curKey = L.unitKey(cur);
+  const all = L.openUnits(a);
+  const me = all.find((u) => u.key === curKey);
+  const others = all.filter((u) => u.key !== curKey);
+  const next = others.find((u) => !u.skipped);
+  const btnRow = (u) => `<div class="item"><div class="grow"><div class="t">${esc(u.label)}</div>
+    <div class="s">${u.timed ? 'Zeitblock' : `${u.pending} ${u.pending === 1 ? 'Satz' : 'Sätze'} offen`}${u.skippedNames.length ? ' · ausgelassen: ' + esc(u.skippedNames.join(', ')) : ''}</div></div>
+    <button class="btn sm ok" data-m="go|${esc(u.key)}">Jetzt</button></div>`;
+  const r = await modal(`<h3>Gerät belegt?</h3><p class="sm muted">Aktuell: <b>${esc(me ? me.label : cur.name || cur.blockName)}</b>. Nichts geht verloren: Erfasste Sätze bleiben gespeichert, offene Sätze kannst du jederzeit nachholen.</p>
+    <button class="btn" data-m="later" ${next ? '' : 'disabled'}>Später machen${next ? ` (nach „${esc(next.label)}“)` : ''}</button>
+    ${cur.type === 'set' ? '<button class="btn ghost" style="margin-top:8px" data-m="skipset">Nur diesen Satz auslassen</button>' : ''}
+    ${cur.type === 'set' ? '<button class="btn ghost" style="margin-top:8px" data-m="skip">Ganze Übung auslassen (bleibt nachholbar)</button>' : ''}
+    ${me && me.skippedNames.length ? `<button class="btn ghost" style="margin-top:8px" data-m="go|${esc(curKey)}">Wieder aufnehmen: ${esc(me.skippedNames.join(', '))}</button>` : ''}
+    ${others.length ? `<h3 style="margin-top:16px">Stattdessen jetzt machen</h3>${others.map(btnRow).join('')}` : ''}
+    <div class="row"><button class="btn ghost" data-m="x">Abbrechen</button></div>`);
+  if (!r) return;
+  const now = Date.now();
+  if (r.choice === 'later') { const l = L.postponeCurrent(a, now); toast(l ? `Verschoben hinter „${l}“.` : 'Keine weitere offene Übung.'); }
+  else if (r.choice === 'skip') L.skipCurrent(a, now);
+  else if (r.choice === 'skipset') L.skipSet(a, now);
+  else if (r.choice.startsWith('go|')) L.bringToFront(a, r.choice.slice(3), now);
+  await persistActive();
+  if (!L.currentStep(a) && !L.openUnits(a).length) { await finishTraining(false); return; }
+  initForm(); rerender(); window.scrollTo(0, 0);
 }
 
 async function startTraining() {
@@ -290,7 +348,7 @@ async function doneStep() {
     res = L.completeStep(a, { actualSec: Math.round((m ?? def) * 60), note: f.note }, Date.now());
   }
   await persistActive();
-  if (res.finished) { await finishTraining(false); return; }
+  if (res.finished && !L.openUnits(a).length) { await finishTraining(false); return; }
   initForm(); rerender(); window.scrollTo(0, 0);
 }
 
@@ -422,23 +480,31 @@ function viewPlan() {
   if (kind === 'ex') return viewPlanEx(Number(id));
   if (kind === 'block') return viewPlanBlock(id);
   const p = S.plan;
-  let h = `<h1>Plan</h1><p class="muted">Gesamtdauer: <b>${L.planTotalMinutes(p)} min</b> (aus den Blockzeiten berechnet). Zum Sortieren am ☰ ziehen oder die Pfeile nutzen. Antippen bearbeitet.</p><div data-sort="blocks">`;
+  const std = L.blockChangeOf(p, {});
+  let h = `<h1>Plan</h1><p class="muted">Gesamtdauer: <b>${L.planTotalMinutes(p)} min</b> (aus den Blockzeiten berechnet). Zum Sortieren am ☰ ziehen oder die Pfeile nutzen. Antippen bearbeitet.</p>
+    <label class="f" for="p-chg">Wechselzeit zwischen Blöcken (s)</label><input id="p-chg" inputmode="numeric" data-planchg value="${esc(p.blockChange ?? L.DEFAULT_BLOCK_CHANGE)}">
+    <p class="sm muted">Gilt für alle Blöcke ohne eigenen Wert (Block antippen → „Wechselzeit danach“). Danach „Zeiten lückenlos“ tippen, damit die Zeitfenster die Wechselzeiten enthalten.</p><div data-sort="blocks">`;
   for (const b of p.blocks) {
     h += `<div class="block" data-id="${b.id}"><div class="row"><span class="drag" aria-hidden="true">☰</span>
-      <a class="grow" style="text-decoration:none;color:inherit;flex:1;min-width:0" href="#/plan/block/${b.id}"><div class="t"><b>${esc(b.name)}</b></div><div class="s sm muted">${L.fmtWindow(b)}${b.mode === 'superset' ? ' · Supersatz' : b.mode === 'circuit' ? ` · Zirkel ${b.rounds}×` : ''}${b.kind === 'timed' ? ' · Zeit ' + fmtNum(b.minutes) + ' min' : ''}</div></a>
+      <a class="grow" style="text-decoration:none;color:inherit;flex:1;min-width:0" href="#/plan/block/${b.id}"><div class="t"><b>${esc(b.name)}</b></div><div class="s sm muted">${L.fmtWindow(b)}${b.mode === 'superset' ? ' · Supersatz' : b.mode === 'alternate' ? ' · Abwechselnd' : b.mode === 'circuit' ? ` · Zirkel ${b.rounds}×` : ''}${b.kind !== 'timed' && (b.mode || 'single') === 'single' && b.switchRest !== null && b.switchRest !== undefined && b.switchRest !== '' ? ` · ${fmtSec(Number(b.switchRest))} Wechsel zwischen Übungen` : ''}${b.kind === 'timed' ? ' · Zeit ' + fmtNum(b.minutes) + ' min' : ''}</div></a>
       <div class="row fit">${arrows('block', b.id)}</div></div>`;
     if (b.kind !== 'timed') {
       h += `<div data-sort="items" data-key="${b.id}">`;
       for (const eid of b.items || []) {
         const ex = p.exercises[eid]; if (!ex) continue;
-        h += `<div class="item" data-id="${eid}"><span class="drag" aria-hidden="true">☰</span><a class="grow" style="text-decoration:none;color:inherit" href="#/plan/ex/${eid}"><div class="t ellip">#${eid} ${esc(ex.name)}</div><div class="s ellip">${esc(exSummary(ex))}</div></a>
+        h += `<div class="item" data-id="${eid}"><span class="drag" aria-hidden="true">☰</span><a class="grow exlink" href="#/plan/ex/${eid}">${thumb(eid)}<span class="txt"><div class="t clamp2">#${eid} ${esc(ex.name)}</div><div class="s ellip">${esc(exSummary(ex))}</div></span></a>
           <div class="row fit">${arrows('item', eid, b.id)}</div></div>`;
       }
       h += `</div><button class="btn ghost sm" style="width:100%" data-act="addEx" data-b="${b.id}">+ Übung in diesen Block</button>`;
     } else h += `<div class="sm muted" style="padding:4px 8px">${esc(b.note || '')}</div>`;
+    if (b !== p.blocks[p.blocks.length - 1]) {
+      const c = L.blockChangeOf(p, b);
+      h += `<div class="sm muted" style="padding:6px 8px 0">↓ danach ${c ? fmtSec(c) + ' Wechselzeit' : 'kein Wechsel'}${c !== std ? ' (eigener Wert)' : ''}</div>`;
+    }
     h += '</div>';
   }
   h += `</div><div class="grid2"><button class="btn" data-act="addBlock">+ Block</button><button class="btn ghost" data-act="align">Zeiten lückenlos</button></div>
+    <a class="btn ghost" style="margin-top:10px" href="#/backup" data-act="toPlanTransfer">Plan auf andere Geräte übertragen</a>
     <button class="btn ghost" style="margin-top:10px" data-act="resetPlan">Plan auf Ausgangsversion zurücksetzen</button>`;
   return h;
 }
@@ -496,7 +562,7 @@ function viewPlanBlock(id) {
   const b = S.plan.blocks.find((x) => x.id === id);
   if (!b) return '<a class="btn ghost" href="#/plan">‹ Plan</a><p>Block nicht gefunden.</p>';
   if (!S.ui.bd || S.ui.bd.id !== id) {
-    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: String(b.roundRest ?? 60), minutes: fmtNum(b.minutes ?? 10), note: b.note || '' };
+    S.ui.bd = { id, name: b.name, start: fmtNum(b.start), end: fmtNum(b.end), kind: b.kind, mode: b.mode || 'single', rounds: String(b.rounds ?? 2), roundRest: b.roundRest === null || b.roundRest === undefined || b.roundRest === '' ? (b.mode === 'circuit' ? '60' : '') : String(b.roundRest), minutes: fmtNum(b.minutes ?? 10), note: b.note || '', changeAfter: b.changeAfter === null || b.changeAfter === undefined || b.changeAfter === '' ? '' : String(b.changeAfter), switchRest: b.switchRest === null || b.switchRest === undefined || b.switchRest === '' ? '' : String(b.switchRest) };
   }
   const d = S.ui.bd;
   const opt = (v, t, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`;
@@ -508,23 +574,42 @@ function viewPlanBlock(id) {
   if (d.kind === 'timed') h += `<label class="f" for="b-min">Dauer (min)</label><input id="b-min" inputmode="decimal" data-in="bd.minutes" value="${esc(d.minutes)}">
     <label class="f" for="b-note">Hinweis</label><textarea id="b-note" data-in="bd.note">${esc(d.note)}</textarea>`;
   else {
-    h += `<label class="f" for="b-mode">Ablauf</label><select id="b-mode" data-in="bd.mode" data-rr>${opt('single', 'Einzeln nacheinander', d.mode)}${opt('superset', 'Supersatz (abwechselnd, Pause nach der Runde)', d.mode)}${opt('circuit', 'Zirkel (feste Rundenzahl)', d.mode)}</select>`;
+    if (d.mode === 'single') h += `<label class="f" for="b-sw">Wechselzeit zwischen den Übungen (s)</label><input id="b-sw" inputmode="numeric" data-in="bd.switchRest" value="${esc(d.switchRest)}" placeholder="leer = Pause der jeweiligen Übung">`;
+    h += `<label class="f" for="b-mode">Ablauf</label><select id="b-mode" data-in="bd.mode" data-rr>${opt('single', 'Einzeln nacheinander', d.mode)}${opt('alternate', 'Abwechselnd (Satzpaare: 30 s Wechsel, Pause nach der Runde)', d.mode)}${opt('superset', 'Supersatz (abwechselnd, Pause erst nach der Runde)', d.mode)}${opt('circuit', 'Zirkel (feste Rundenzahl)', d.mode)}</select>
+      <p class="sm muted">Abwechselnd und Supersatz: Übung 1 Satz 1, Übung 2 Satz 1, Übung 1 Satz 2 … Reihenfolge der Übungen im Plan festlegen. Zirkel: alle Übungen je Runde, Pause nach der Runde.</p>`;
+    if (d.mode === 'alternate') h += `<label class="f" for="b-rr">Pause nach der Runde (s)</label><input id="b-rr" inputmode="numeric" data-in="bd.roundRest" value="${esc(d.roundRest)}" placeholder="leer = Pause der letzten Übung der Runde">
+      <p class="sm muted">Ablauf: erst alle Aufwärmsätze, dann Runde 1 (Satz 1 jeder Übung), Runde 2 … Zwischen den Übungen einer Runde ${L.SWITCH_REST} s Wechselpause. Übungen mit weniger Sätzen fallen in späteren Runden weg.</p>`;
     if (d.mode === 'circuit') h += `<div class="grid2"><div><label class="f" for="b-rounds">Runden</label><input id="b-rounds" inputmode="numeric" data-in="bd.rounds" value="${esc(d.rounds)}"></div>
       <div><label class="f" for="b-rr">Pause nach Runde (s)</label><input id="b-rr" inputmode="numeric" data-in="bd.roundRest" value="${esc(d.roundRest)}"></div></div>`;
   }
+  h += `<label class="f" for="b-chg">Wechselzeit danach (s)</label><input id="b-chg" inputmode="numeric" data-in="bd.changeAfter" value="${esc(d.changeAfter)}" placeholder="leer = Standard (${L.blockChangeOf(S.plan, {})} s)">
+    <p class="sm muted">Zeit bis zum nächsten Block, z. B. für den Weg in einen anderen Bereich. 0 = direkt weiter.</p>`;
   return h + `<div class="cta"><button class="btn ok" data-act="saveBlock">Speichern</button></div><button class="btn danger" data-act="delBlock" style="margin-top:8px">Block löschen</button>`;
 }
 
 // ---------- Sicherung ----------
 function viewBackup() {
   const nPh = Object.keys(S.photos).length;
-  return `<h1>Sicherung</h1>${backupWarn()}
+  return `<h1>Sicherung</h1>${backupWarn(false)}
     <p class="muted">Enthalten: Plan, ${S.sessions.length} Training${S.sessions.length === 1 ? '' : 's'}, ${nPh} eigene${nPh === 1 ? 's' : ''} Foto${nPh === 1 ? '' : 's'}.</p>
     <button class="btn" data-act="exportJson">Alles exportieren (JSON)</button>
     ${typeof navigator.canShare === 'function' ? '<button class="btn ghost" style="margin-top:10px" data-act="shareJson">Sicherung teilen / in Dateien sichern</button>' : ''}
     <button class="btn ghost" style="margin-top:10px" data-act="exportCsv">Verlauf als CSV exportieren</button>
-    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" accept="application/json,.json" data-import hidden>Sicherung importieren (JSON)</label>
+    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" data-import hidden>Sicherung importieren (JSON)</label>
+    <p class="sm muted">Der Import einer Sicherung ersetzt <b>alles</b> auf diesem Gerät, auch den Verlauf.</p>
+    ${planTransferHTML()}
     <h2>Gefahrenbereich</h2><button class="btn danger" data-act="wipe">Alle Daten löschen</button>`;
+}
+function planTransferHTML() {
+  const share = typeof navigator.canShare === 'function';
+  return `<h2 id="plan-transfer">Plan auf andere Geräte übertragen</h2>
+    <p class="sm muted">Überträgt nur den Plan (mit eigenen Fotos der Übungen). Der Verlauf bleibt auf jedem Gerät erhalten.</p>
+    <ol class="sm muted" style="padding-left:20px;margin:6px 0 10px"><li>Hier auf dem Gerät mit dem geänderten Plan: ${share ? '„Plan teilen“ (z. B. per AirDrop) oder ' : ''}„Plan exportieren“.</li><li>Auf dem anderen Gerät: „Plan importieren“ und die Datei wählen.</li></ol>
+    ${share ? '<button class="btn" data-act="sharePlan">Plan teilen (AirDrop, Dateien …)</button>' : ''}
+    <button class="btn ${share ? 'ghost' : ''}" style="margin-top:10px" data-act="exportPlan">Plan exportieren</button>
+    <label class="btn ghost" style="margin-top:10px;cursor:pointer"><input type="file" data-planimport hidden>Plan importieren (Datei)</label>
+    <button class="btn ghost" style="margin-top:10px" data-act="pastePlan">Plan aus Text einfügen</button>
+    ${S.meta.planImportedAt ? `<p class="sm muted">Zuletzt importiert: ${dateFmt(S.meta.planImportedAt)} ${timeFmt(S.meta.planImportedAt)}${S.meta.planSourceAt ? ` (Stand vom ${dateFmt(S.meta.planSourceAt)} ${timeFmt(S.meta.planSourceAt)})` : ''}</p>` : ''}`;
 }
 function download(name, text, mime) {
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
@@ -535,6 +620,47 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 const exportJSON = () => JSON.stringify(L.buildExport(S.plan, S.sessions, S.photos));
 async function markExport() { S.meta.lastExport = Date.now(); await store.saveMeta(S.meta); }
 
+const planJSON = () => JSON.stringify(L.buildPlanExport(S.plan, S.photos));
+const planFileName = () => `training-plan-${stamp()}.json`;
+
+async function doPlanImport(file) {
+  let text;
+  try { text = await file.text(); } catch (e) { toast('Datei konnte nicht gelesen werden: ' + e.message); return; }
+  await importPlanText(text);
+}
+async function importPlanText(text) {
+  let obj;
+  try { obj = JSON.parse(String(text).trim()); } catch { toast('Kein gültiger Plan (JSON unvollständig oder beschädigt).'); return; }
+  const r = L.readPlanImport(obj);
+  if (!r.ok) { toast(r.error); return; }
+  const nEx = Object.keys(r.plan.exercises).length;
+  const phTxt = r.photos === null ? 'eigene Fotos bleiben unverändert' : `${Object.keys(r.photos).length} eigene Fotos`;
+  const when = r.exportedAt ? ` vom ${dateFmt(r.exportedAt)} ${timeFmt(r.exportedAt)}` : '';
+  const ok = await confirmBox(`Plan${when} übernehmen? (${r.plan.blocks.length} Blöcke, ${nEx} Übungen, ${phTxt})${r.fromBackup ? ' Aus der Sicherung wird nur der Plan übernommen.' : ''} Der aktuelle Plan auf diesem Gerät wird ersetzt, der Verlauf bleibt erhalten.`, 'Plan übernehmen', 'ok');
+  if (!ok) return;
+  try {
+    const photos = L.mergePlanPhotos(S.photos, r.plan, r.photos);
+    await store.replacePlan(r.plan, photos);
+    S.plan = await store.getPlan(); S.photos = await store.getPhotos();
+    S.meta.planImportedAt = Date.now(); S.meta.planSourceAt = r.exportedAt; await store.saveMeta(S.meta);
+  } catch (e) {
+    console.error(e);
+    await modal(`<h3>Plan konnte nicht gespeichert werden</h3><p class="sm">${esc(e && (e.name + ': ' + e.message))}</p>
+      <p class="sm muted">Häufigste Ursache auf dem iPhone: zu wenig freier Speicher. Versuche es mit der kleinen Plan-Datei ohne Fotos oder mit „Plan aus Text einfügen“.</p>
+      <div class="row"><button class="btn" data-m="x">OK</button></div>`);
+    return;
+  }
+  S.ui.xd = null; S.ui.bd = null;
+  toast(S.active ? 'Plan übernommen. Gilt ab dem nächsten Training.' : 'Plan übernommen.'); rerender();
+}
+async function pastePlan() {
+  const r = await modal(`<h3>Plan aus Text einfügen</h3><p class="sm muted">Den Plan-Text (beginnt mit <code>{"app":"fitness-app-2026"</code>) kopieren und hier einfügen.</p>
+    <textarea id="m-plan" name="txt" style="min-height:180px;font-size:13px" placeholder="Hier einfügen"></textarea>
+    <div class="row"><button class="btn ghost" data-m="x">Abbrechen</button><button class="btn ok" data-m="ok">Weiter</button></div>`);
+  if (!r || !r.txt.trim()) return;
+  await importPlanText(r.txt);
+}
+
 async function doImport(file) {
   let obj;
   try { obj = JSON.parse(await file.text()); } catch { toast('Die Datei ist kein gültiges JSON.'); return; }
@@ -542,7 +668,9 @@ async function doImport(file) {
   if (!v.ok) { toast(v.error); return; }
   const ok = await confirmBox(`Alle aktuellen Daten durch die Sicherung ersetzen? (${obj.sessions.length} Trainings, ${Object.keys(obj.photos || {}).length} Fotos)`, 'Importieren', 'ok');
   if (!ok) return;
-  await store.replaceAll({ plan: obj.plan, sessions: obj.sessions, photos: obj.photos || {} });
+  try { await store.replaceAll({ plan: obj.plan, sessions: obj.sessions, photos: obj.photos || {} }); } catch (e) {
+    console.error(e); toast('Import konnte nicht gespeichert werden: ' + (e && e.message)); return;
+  }
   S.plan = await store.getPlan(); S.sessions = await store.listSessions(); S.photos = await store.getPhotos(); S.active = null;
   S.ui.xd = null; S.ui.bd = null;
   toast('Import abgeschlossen.'); rerender();
@@ -613,14 +741,8 @@ const ACT = {
     if (!L.goBack(S.active, Date.now())) { toast('Das ist der erste Schritt.'); return; }
     await persistActive(); initForm(); rerender();
   },
-  async skip() {
-    const step = L.currentStep(S.active);
-    if (step.type === 'set' && !(await confirmBox(`„${step.name}“ überspringen?`, 'Überspringen', 'ok'))) return;
-    L.skipCurrent(S.active, Date.now());
-    await persistActive();
-    if (!L.currentStep(S.active)) { await finishTraining(false); return; }
-    initForm(); rerender();
-  },
+  order: orderSheet,
+  async bring(d, el) { L.bringToFront(S.active, el.dataset.key, Date.now()); await persistActive(); initForm(); rerender(); window.scrollTo(0, 0); },
   adj(d, el) {
     const f = el.dataset.f, cur = parseNum(S.ui.form[f]) ?? 0;
     const v = Math.max(0, Math.round((cur + Number(el.dataset.d)) * 100) / 100);
@@ -682,6 +804,7 @@ const ACT = {
     const id = L.addExercise(S.plan, el.dataset.b, { name: 'Neue Übung', device: '', tech: '', photo: null, warmup: null, sets: [{ reps: 10, weight: null }], unit: 'kg', sides: 'none', rest: 60, warmRest: 30, step: null, optional: false });
     await savePlan(); S.ui.xd = null; nav('plan/ex/' + id);
   },
+  toPlanTransfer() { setTimeout(() => document.getElementById('plan-transfer')?.scrollIntoView(), 80); },
   cancelEx() { S.ui.xd = null; S.ui.bd = null; },
   xaddSet() { const d = S.ui.xd, l = d.sets[d.sets.length - 1]; d.sets.push({ ...l }); rerender(); },
   xdelSet(d, el) { S.ui.xd.sets.splice(+el.dataset.i, 1); rerender(); },
@@ -714,9 +837,12 @@ const ACT = {
     if (!d.name.trim()) { toast('Bitte einen Namen eingeben.'); return; }
     if (start === null || end === null || end < start) { toast('Zeitfenster ungültig (Ende vor Start).'); return; }
     if (d.kind === 'timed' && (b.items || []).length) { toast('Der Block enthält Übungen. Verschiebe oder lösche sie zuerst.'); return; }
-    Object.assign(b, { name: d.name.trim(), start, end, kind: d.kind });
+    Object.assign(b, { name: d.name.trim(), start, end, kind: d.kind, changeAfter: parseNum(d.changeAfter) });
     if (d.kind === 'timed') Object.assign(b, { minutes: parseNum(d.minutes) ?? 1, note: d.note.trim(), mode: 'single' });
-    else Object.assign(b, { mode: d.mode, rounds: Math.max(1, parseNum(d.rounds) || 1), roundRest: parseNum(d.roundRest) ?? 60 });
+    else if (d.mode === 'single') Object.assign(b, { mode: d.mode, switchRest: parseNum(d.switchRest) });
+    else if (d.mode === 'alternate') {
+      Object.assign(b, { mode: d.mode, roundRest: parseNum(d.roundRest) }); // null = Pause der letzten Übung
+    } else Object.assign(b, { mode: d.mode, rounds: Math.max(1, parseNum(d.rounds) || 1), roundRest: parseNum(d.roundRest) ?? 60 });
     await savePlan(); S.ui.bd = null; nav('plan');
   },
   async delBlock() {
@@ -738,6 +864,15 @@ const ACT = {
     try {
       if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Training Sicherung' }); await markExport(); rerender(); }
       else toast('Teilen wird hier nicht unterstützt. Nutze „Alles exportieren“.');
+    } catch (e) { if (e.name !== 'AbortError') toast('Teilen fehlgeschlagen.'); }
+  },
+  pastePlan,
+  exportPlan() { download(planFileName(), planJSON(), 'application/json'); },
+  async sharePlan() {
+    const file = new File([planJSON()], planFileName(), { type: 'application/json' });
+    try {
+      if (navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: 'Trainingsplan' });
+      else toast('Teilen wird hier nicht unterstützt. Nutze „Plan exportieren“.');
     } catch (e) { if (e.name !== 'AbortError') toast('Teilen fehlgeschlagen.'); }
   },
   exportCsv() { download(`training-verlauf-${stamp()}.csv`, L.toCSV(S.sessions), 'text/csv;charset=utf-8'); },
@@ -775,6 +910,12 @@ function bind() {
       } catch (err) { toast('Foto konnte nicht gelesen werden.'); }
     }
     if ('import' in t.dataset && t.files[0]) { await doImport(t.files[0]); t.value = ''; }
+    if ('planimport' in t.dataset && t.files[0]) { await doPlanImport(t.files[0]); t.value = ''; }
+    if ('planchg' in t.dataset) {
+      const v = parseNum(t.value);
+      if (v === null || v < 0) { toast('Bitte eine Zahl ≥ 0 eingeben.'); return; }
+      S.plan.blockChange = v; await savePlan(); toast(`Wechselzeit ${fmtSec(v)} gespeichert.`); rerender();
+    }
   });
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && S.route[0] === 'training') { wakeLock = null; lockScreen(); tick(); }

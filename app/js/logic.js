@@ -12,6 +12,18 @@ export function defaultStep(unit) {
 }
 export function stepOf(ex) { return ex.step > 0 ? ex.step : defaultStep(ex.unit); }
 
+/** Wechselpause zwischen den Übungen einer Runde im Modus „Abwechselnd“ (Sekunden). */
+export const SWITCH_REST = 30;
+/** Standard-Wechselzeit zwischen zwei Blöcken (Sekunden), z. B. Weg in einen anderen Bereich. */
+export const DEFAULT_BLOCK_CHANGE = 60;
+const isBlank = (v) => v === null || v === undefined || v === '';
+/** Wechselzeit nach einem Block: eigener Wert des Blocks, sonst Standard des Plans, sonst 60 s. */
+export function blockChangeOf(plan, block) {
+  if (!isBlank(block.changeAfter)) return Math.max(0, Number(block.changeAfter) || 0);
+  if (!isBlank(plan.blockChange)) return Math.max(0, Number(plan.blockChange) || 0);
+  return DEFAULT_BLOCK_CHANGE;
+}
+
 export function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
 // ---------- Zahlen / Zeit ----------
@@ -41,12 +53,15 @@ export function planTotalMinutes(plan) {
 export function fmtWindow(b) { return `${fmtNum(b.start)}–${fmtNum(b.end)} min`; }
 
 /** Zeitfenster lückenlos hintereinander legen; Dauer je Block bleibt erhalten. */
+/** Zeitfenster lückenlos hintereinander legen, inkl. Wechselzeit zwischen den Blöcken; Dauer je Block bleibt. */
 export function realignTimes(plan) {
   let t = 0;
-  for (const b of plan.blocks) {
+  plan.blocks.forEach((b, i) => {
     const d = Math.max(0, (Number(b.end) || 0) - (Number(b.start) || 0));
-    b.start = t; b.end = t + d; t += d;
-  }
+    b.start = t; b.end = Math.round((t + d) * 100) / 100;
+    t = b.end + (i < plan.blocks.length - 1 ? blockChangeOf(plan, b) / 60 : 0);
+    t = Math.round(t * 100) / 100;
+  });
   return plan;
 }
 export function moveInArray(arr, from, to) {
@@ -103,10 +118,11 @@ export function buildSteps(plan, opts = {}) {
   const steps = [];
   for (const block of plan.blocks) {
     const start = steps.length;
+    const changeAfter = blockChangeOf(plan, block);
     if (block.kind === 'timed') {
       steps.push({
         type: 'timed', blockId: block.id, blockName: block.name,
-        seconds: Math.round((Number(block.minutes) || 0) * 60), note: block.note || '', rest: 0,
+        seconds: Math.round((Number(block.minutes) || 0) * 60), note: block.note || '', rest: 0, changeAfter,
       });
       continue;
     }
@@ -115,28 +131,38 @@ export function buildSteps(plan, opts = {}) {
     if (!exs.length) continue;
     const mode = block.mode || 'single';
     if (mode === 'single') {
-      for (const ex of exs) {
+      // Wechselzeit zwischen den Übungen im Block (z. B. 30 s im selben Bereich); leer = Pause der Übung wie bisher
+      const sw = isBlank(block.switchRest) ? null : Math.max(0, Number(block.switchRest) || 0);
+      exs.forEach((ex, k) => {
         if (ex.warmup) steps.push(...makeSetSteps(block, ex, 'warmup', ex.warmup, { setNo: 0, setCount: ex.sets.length }, ex.warmRest ?? 30));
-        ex.sets.forEach((s, i) => steps.push(...makeSetSteps(block, ex, 'work', s, { setNo: i + 1, setCount: ex.sets.length }, ex.rest ?? 60)));
-      }
+        ex.sets.forEach((s, i) => {
+          const lastOfEx = i === ex.sets.length - 1 && k < exs.length - 1;
+          steps.push(...makeSetSteps(block, ex, 'work', s, { setNo: i + 1, setCount: ex.sets.length }, lastOfEx && sw !== null ? sw : ex.rest ?? 60));
+        });
+      });
     } else {
       const warm = exs.filter((e) => e.warmup);
+      const alt = mode === 'alternate'; // Abwechselnd (Satzpaare): 30 s Wechsel, Pause nach der Runde
+      const rrBlock = block.roundRest === '' || block.roundRest === undefined || block.roundRest === null ? null : Number(block.roundRest);
       warm.forEach((ex, i) => steps.push(...makeSetSteps(block, ex, 'warmup', ex.warmup,
         { setNo: 0, setCount: 0, groupPos: i, groupSize: warm.length },
-        i === warm.length - 1 ? Math.max(...warm.map((e) => e.warmRest ?? 30)) : 0)));
+        alt ? (ex.warmRest ?? 30) : i === warm.length - 1 ? Math.max(...warm.map((e) => e.warmRest ?? 30)) : 0)));
       const rounds = mode === 'circuit' ? Math.max(1, Number(block.rounds) || 1) : Math.max(...exs.map((e) => e.sets.length));
       for (let r = 0; r < rounds; r++) {
         const part = exs.filter((e) => mode === 'circuit' || r < e.sets.length);
         const roundRest = mode === 'circuit' ? (Number(block.roundRest) || 0) : Math.max(...part.map((e) => e.rest ?? 60));
         part.forEach((ex, i) => {
           const s = ex.sets[Math.min(r, ex.sets.length - 1)];
+          const last = i === part.length - 1;
+          const extra = alt ? { switchRest: SWITCH_REST, roundRest: rrBlock ?? (ex.rest ?? 60) } : {};
           steps.push(...makeSetSteps(block, ex, 'work', s,
-            { setNo: r + 1, setCount: rounds, round: r + 1, rounds, groupPos: i, groupSize: part.length },
-            i === part.length - 1 ? roundRest : 0));
+            { setNo: r + 1, setCount: rounds, round: r + 1, rounds, groupPos: i, groupSize: part.length, ...extra },
+            alt ? (last ? extra.roundRest : SWITCH_REST) : last ? roundRest : 0));
         });
       }
     }
-    if (steps.length > start) steps[steps.length - 1].rest = 0; // Blockwechsel ohne Pausentimer
+    if (steps.length > start) steps[steps.length - 1].rest = 0; // innerhalb des Blocks keine Pause mehr
+    for (let i = start; i < steps.length; i++) steps[i].changeAfter = changeAfter; // Wechselzeit zum nächsten Block
   }
   steps.forEach((s, i) => { s.index = i; });
   return steps;
@@ -175,9 +201,31 @@ export function enterStep(a, now) {
     ? { startedAt: now, endAt: now + s.seconds * 1000, total: s.seconds, notified: false }
     : null;
 }
-function isSkipped(a, i) { const s = a.steps[i]; return s && s.type === 'set' && a.skipped.includes(s.exId); }
+function isSkipped(a, i) {
+  const s = a.steps[i];
+  return !!s && ((s.type === 'set' && a.skipped.includes(s.exId)) || (a.skippedSteps || []).includes(s.index));
+}
 function nextIndex(a, from) { let i = from + 1; while (i < a.steps.length && isSkipped(a, i)) i++; return i; }
-function prevIndex(a, from) { let i = from - 1; while (i >= 0 && isSkipped(a, i)) i--; return i; }
+function prevIndex(a, from) {
+  // Zurück führt auch zu einzeln ausgelassenen Sätzen (zum Nachholen), nicht zu ausgelassenen Übungen.
+  let i = from - 1;
+  while (i >= 0 && a.steps[i].type === 'set' && a.skipped.includes(a.steps[i].exId)) i--;
+  return i;
+}
+/**
+ * Pause nach einem Satz. Im Modus „Abwechselnd“ zur Laufzeit bestimmt, damit sie auch bei
+ * ausgelassenen Übungen/Sätzen stimmt: 30 s, solange in derselben Runde noch ein Satz folgt,
+ * sonst Rundenpause; am Blockende keine Pause.
+ */
+export function restAfter(a, step, next) {
+  if (!next) return 0;
+  // Nächster Schritt in einem anderen Block: Wechselzeit (Pläne ohne Angabe: 60 s)
+  if (next.blockId !== step.blockId) return step.changeAfter ?? DEFAULT_BLOCK_CHANGE;
+  if (step.mode !== 'alternate' || step.type !== 'set' || step.setType !== 'work') return step.rest;
+  if (step.side === 'links') return 0;
+  if (next.type === 'set' && next.setType === 'work' && next.round === step.round) return step.switchRest ?? SWITCH_REST;
+  return step.roundRest ?? step.rest;
+}
 
 /** Hinter Plan? Gibt Minuten zurück (0 = im Plan). */
 export function behindMinutes(a, now) {
@@ -225,24 +273,54 @@ export function completeStep(a, values, now) {
   } else {
     const t = a.timer;
     const spent = t ? Math.round((Math.min(now, t.endAt + 36e5) - t.startedAt) / 1000) : 0;
-    a.session.entries.push({
+    const te = {
       kind: 'timed', name: step.blockName, blockName: step.blockName, targetSec: step.seconds,
-      actualSec: values.actualSec ?? spent, note: values.note || '',
-    });
+      actualSec: values.actualSec ?? spent, note: values.note || '', stepIndex: step.index,
+    };
+    const ti = a.session.entries.findIndex((e) => e.kind === 'timed' && e.stepIndex === step.index);
+    if (ti >= 0) a.session.entries[ti] = te; else a.session.entries.push(te);
   }
+  if (a.skippedSteps) a.skippedSteps = a.skippedSteps.filter((i) => i !== step.index);
   const next = nextIndex(a, a.stepIndex);
-  a.rest = step.rest > 0 && next < a.steps.length
-    ? { endAt: now + step.rest * 1000, total: step.rest, notified: false } : null;
+  const rest = next < a.steps.length ? restAfter(a, step, a.steps[next]) : 0;
+  const nx = a.steps[next];
+  const change = !!nx && nx.blockId !== step.blockId;
+  const toEx = !change && nx && nx.type === 'set' && step.type === 'set' && nx.exId !== step.exId && step.mode === 'single' ? nx.name : null;
+  a.rest = rest > 0 ? { endAt: now + rest * 1000, total: rest, notified: false, after: step.index, change, toBlock: change ? nx.blockName : null, toEx } : null;
   a.stepIndex = next;
   if (next < a.steps.length) enterStep(a, now); else a.timer = null;
   return { finished: next >= a.steps.length, newTarget };
+}
+/**
+ * Nach dem Auslassen läuft die bereits gestartete Pause weiter, aber passend zum neuen
+ * nächsten Satz (z. B. Rundenpause statt Wechselpause, wenn die letzte Übung der Runde wegfällt).
+ */
+function retimeRest(a, now) {
+  const r = a.rest;
+  if (!r || r.after === undefined) { a.rest = null; return; }
+  if (r.change) return; // Wechselzeit (Weg zum nächsten Bereich) läuft weiter
+  const prev = a.steps.find((x) => x.index === r.after);
+  if (!prev || prev.mode !== 'alternate') { a.rest = null; return; } // alte Modi: Pause endet wie bisher
+  const cur = currentStep(a);
+  const total = prev && cur ? restAfter(a, prev, cur) : 0;
+  const endAt = r.endAt - r.total * 1000 + total * 1000;
+  a.rest = total > 0 && endAt > now ? { ...r, endAt, total } : null;
 }
 export function skipCurrent(a, now) {
   const s = currentStep(a);
   if (!s) return;
   if (s.type === 'set') a.skipped.push(s.exId);
-  a.rest = null;
   a.stepIndex = nextIndex(a, a.stepIndex);
+  retimeRest(a, now);
+  enterStep(a, now);
+}
+/** Nur diesen einen Satz auslassen; die Übung läuft danach normal weiter. */
+export function skipSet(a, now) {
+  const s = currentStep(a);
+  if (!s || s.type !== 'set') return;
+  a.skippedSteps = [...(a.skippedSteps || []), s.index];
+  a.stepIndex = nextIndex(a, a.stepIndex);
+  retimeRest(a, now);
   enterStep(a, now);
 }
 export function goBack(a, now) {
@@ -250,6 +328,74 @@ export function goBack(a, now) {
   if (p < 0) return false;
   a.stepIndex = p; a.rest = null; enterStep(a, now);
   return true;
+}
+// ---------- Reihenfolge im Training ändern (Gerät belegt) ----------
+/** Einheit = was zusammen verschoben wird: Einzelübung, oder ganzer Block bei Supersatz/Zirkel/Abwechselnd/Zeitblock. */
+export function unitKey(s) {
+  if (s.type === 'timed' || s.mode !== 'single') return 'b:' + s.blockId;
+  return `e:${s.blockId}:${s.exId}`;
+}
+export function isStepDone(a, s) {
+  if ((a.skippedSteps || []).includes(s.index)) return true; // bewusst ausgelassener Einzelsatz
+  if (s.type === 'set') return !!findRecorded(a, s);
+  // Einträge aus älteren Versionen haben keinen stepIndex: über den Blocknamen zuordnen
+  return a.session.entries.some((e) => e.kind === 'timed' && (e.stepIndex === s.index || (e.stepIndex === undefined && e.blockName === s.blockName)));
+}
+/** Alle noch offenen Einheiten in aktueller Reihenfolge (inkl. ausgelassener). */
+export function openUnits(a) {
+  const map = new Map();
+  a.steps.forEach((s, pos) => {
+    if (isStepDone(a, s)) return;
+    const k = unitKey(s);
+    let u = map.get(k);
+    if (!u) {
+      u = { key: k, pos, blockName: s.blockName, names: [], exIds: [], skippedNames: [], pending: 0, skipped: true, timed: s.type === 'timed' };
+      map.set(k, u);
+    }
+    if (s.type === 'set' && !u.exIds.includes(s.exId)) { u.exIds.push(s.exId); u.names.push(s.name); }
+    u.pending++;
+    const sk = s.type === 'set' && a.skipped.includes(s.exId);
+    if (!sk) u.skipped = false;
+    else if (!u.skippedNames.includes(s.name)) u.skippedNames.push(s.name);
+  });
+  return [...map.values()].map((u) => ({
+    ...u, label: u.timed ? u.blockName : u.key.startsWith('b:') ? `${u.blockName}: ${u.names.join(' + ')}` : u.names[0],
+  }));
+}
+function reorder(a, key, insertAt) {
+  const isU = (s) => unitKey(s) === key && !isStepDone(a, s);
+  const moving = a.steps.filter(isU);
+  const before = a.steps.slice(0, a.stepIndex).filter((s) => !isU(s));
+  const after = a.steps.slice(a.stepIndex).filter((s) => !isU(s));
+  const at = insertAt(after);
+  a.steps = [...before, ...after.slice(0, at), ...moving, ...after.slice(at)];
+  a.stepIndex = before.length;
+  return moving;
+}
+/** Einheit sofort machen (vorziehen bzw. ausgelassene Übung nachholen). */
+export function bringToFront(a, key, now) {
+  const moving = reorder(a, key, () => 0);
+  if (!moving.length) return false;
+  const ids = new Set(moving.filter((s) => s.type === 'set').map((s) => s.exId));
+  a.skipped = a.skipped.filter((id) => !ids.has(id));
+  enterStep(a, now);
+  return true;
+}
+/** Aktuelle Einheit hinter die nächste offene Einheit schieben. Liefert deren Bezeichnung oder null. */
+export function postponeCurrent(a, now) {
+  const cur = currentStep(a);
+  if (!cur) return null;
+  const key = unitKey(cur);
+  const nextU = a.steps.slice(a.stepIndex).find((s) => unitKey(s) !== key && !isStepDone(a, s) && !(s.type === 'set' && a.skipped.includes(s.exId)));
+  if (!nextU) return null;
+  const k2 = unitKey(nextU);
+  reorder(a, key, (after) => {
+    let last = -1;
+    after.forEach((s, i) => { if (unitKey(s) === k2) last = i; });
+    return last + 1;
+  });
+  enterStep(a, now);
+  return openUnits(a).find((u) => u.key === k2)?.label || '';
 }
 export function finalizeSession(a, now, aborted) {
   const s = a.session;
@@ -373,17 +519,54 @@ export function toCSV(sessions, tz = {}) {
 export function buildExport(plan, sessions, photos, now = Date.now()) {
   return { app: APP_ID, version: 1, exportedAt: now, plan, sessions, photos };
 }
+function validatePlan(plan) {
+  if (!plan || !Array.isArray(plan.blocks) || !plan.exercises || typeof plan.exercises !== 'object') return { ok: false, error: 'Plan fehlt oder ist beschädigt.' };
+  for (const b of plan.blocks) {
+    if (!b || typeof b.id !== 'string' || !b.name) return { ok: false, error: 'Ein Block im Plan ist beschädigt.' };
+    for (const id of b.items || []) if (!plan.exercises[id]) return { ok: false, error: `Block „${b.name}“ verweist auf eine fehlende Übung (${id}).` };
+  }
+  return { ok: true };
+}
+function validatePhotos(ph) {
+  for (const k of Object.keys(ph || {})) if (typeof ph[k] !== 'string' || !ph[k].startsWith('data:image/')) return { ok: false, error: `Eigenes Foto ${k} ist beschädigt.` };
+  return { ok: true };
+}
 export function validateImport(o) {
   if (!o || typeof o !== 'object') return { ok: false, error: 'Keine gültige JSON-Datei.' };
   if (o.app !== APP_ID) return { ok: false, error: 'Die Datei stammt nicht aus dieser App.' };
-  if (!o.plan || !Array.isArray(o.plan.blocks) || !o.plan.exercises || typeof o.plan.exercises !== 'object') return { ok: false, error: 'Plan fehlt oder ist beschädigt.' };
-  for (const b of o.plan.blocks) {
-    if (!b || typeof b.id !== 'string' || !b.name) return { ok: false, error: 'Ein Block im Plan ist beschädigt.' };
-    for (const id of b.items || []) if (!o.plan.exercises[id]) return { ok: false, error: `Block „${b.name}“ verweist auf eine fehlende Übung (${id}).` };
-  }
+  if (o.kind === 'plan') return { ok: false, error: 'Das ist eine Plan-Datei. Bitte über „Plan importieren“ einlesen.' };
+  const vp = validatePlan(o.plan); if (!vp.ok) return vp;
   if (!Array.isArray(o.sessions)) return { ok: false, error: 'Verlauf fehlt.' };
   for (const s of o.sessions) if (!s || !s.id || !Array.isArray(s.entries) || typeof s.startedAt !== 'number') return { ok: false, error: 'Ein Training im Verlauf ist beschädigt.' };
-  const ph = o.photos || {};
-  for (const k of Object.keys(ph)) if (typeof ph[k] !== 'string' || !ph[k].startsWith('data:image/')) return { ok: false, error: `Eigenes Foto ${k} ist beschädigt.` };
-  return { ok: true };
+  return validatePhotos(o.photos);
+}
+
+// ---------- Nur den Plan übertragen (Verlauf bleibt auf jedem Gerät) ----------
+/** Plan-Datei: Plan plus eigene Fotos der Übungen im Plan. */
+export function buildPlanExport(plan, photos, now = Date.now()) {
+  const ids = new Set(Object.keys(plan.exercises).map(String));
+  const own = Object.fromEntries(Object.entries(photos || {}).filter(([k]) => ids.has(String(k))));
+  return { app: APP_ID, kind: 'plan', version: 1, exportedAt: now, plan, photos: own };
+}
+/** Akzeptiert Plan-Dateien und vollständige Sicherungen; liefert nur Plan und Fotos. */
+export function readPlanImport(o) {
+  if (!o || typeof o !== 'object') return { ok: false, error: 'Keine gültige JSON-Datei.' };
+  if (o.app !== APP_ID) return { ok: false, error: 'Die Datei stammt nicht aus dieser App.' };
+  const vp = validatePlan(o.plan); if (!vp.ok) return vp;
+  const vf = validatePhotos(o.photos); if (!vf.ok) return vf;
+  // Plan-Datei ohne „photos“ (z. B. kleine Datei zum Einfügen): vorhandene eigene Fotos bleiben unverändert
+  const photos = o.photos === undefined || o.photos === null ? null : o.photos;
+  return { ok: true, plan: o.plan, photos, exportedAt: o.exportedAt || null, fromBackup: o.kind !== 'plan' };
+}
+/**
+ * Fotos nach dem Plan-Import: Für Übungen des neuen Plans gilt genau der Stand der Datei
+ * (eigenes Foto oder Standardbild). Fotos anderer Übungen bleiben unberührt.
+ */
+export function mergePlanPhotos(current, plan, incoming) {
+  const out = { ...current };
+  if (incoming === null || incoming === undefined) return out; // Datei ohne Fotos: nichts ändern
+  for (const id of Object.keys(plan.exercises)) {
+    if (incoming[id]) out[id] = incoming[id]; else delete out[id];
+  }
+  return out;
 }
