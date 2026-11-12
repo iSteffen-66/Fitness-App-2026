@@ -719,22 +719,22 @@ test('Plan-Datei ohne Fotos: vorhandene eigene Fotos bleiben erhalten', async ()
   assert.deepEqual(L.mergePlanPhotos(cur, p, {}), {});
 });
 
-// ---------- Ausgangsplan = Steffens Plan (Stand 07.11.2026) ----------
-test('Ausgangsplan entspricht Steffens Plan vom 07.11.', () => {
+// ---------- Ausgangsplan = Steffens Plan (Stand 12.11.2026) ----------
+test('Ausgangsplan entspricht Steffens Plan vom 12.11.', () => {
   const p = defaultPlan();
   assert.deepEqual(p.blocks.map((b) => `${b.name}:${b.mode}:${(b.items || []).join('-')}`), [
     'Cardio Aufwärmen:single:', 'A Roter Käfig:single:1-2-3-14', 'B freie Gewichte:alternate:7-8', 'B Plank:single:19',
-    'C Beine knieschonend:single:11-16-18-17', 'D Zirkelmaschinen:single:5-4-6-15-20', 'Ausklang:single:']);
-  assert.deepEqual(Object.keys(p.exercises).map(Number), [1, 2, 3, 4, 5, 6, 7, 8, 11, 14, 15, 16, 17, 18, 19, 20]);
+    'C Beine knieschonend:single:11-18-16-17', 'D Zirkelmaschinen:single:5-6-15-20', 'Ausklang:single:']);
+  assert.deepEqual(Object.keys(p.exercises).map(Number), [1, 2, 3, 5, 6, 7, 8, 11, 14, 15, 16, 17, 18, 19, 20]);
+  assert.ok(!p.exercises[4], 'Schulterdrücken entfernt');
   assert.equal(p.exercises[2].name, 'Arm ziehen');
-  assert.equal(p.exercises[15].name, 'Rückenstrecker');
-  assert.equal(p.exercises[19].name, 'Unterarmstütz (Plank)');
-  // eigene Fotos nicht im Ausgangsplan (bleiben auf dem Gerät), Standardbilder schon
+  assert.deepEqual([2, 3, 7, 8, 11, 15, 16, 17, 18, 20].map((i) => p.exercises[i].sets[0].weight), [30, 25, 7.5, 40, 35, 35, 37, 35, 40, 45]);
   assert.ok([15, 16, 17, 18, 19, 20].every((id) => p.exercises[id].photo === null));
   assert.equal(p.exercises[1].photo, 'img/01.webp');
-  assert.equal(L.planTotalMinutes(p), 89);
+  assert.equal(p.blocks.find((b) => b.name === 'Ausklang').minutes, 7);
+  assert.equal(L.planTotalMinutes(p), 92);
   assert.equal(L.validateImport(L.buildExport(p, [], {})).ok, true);
-  assert.notStrictEqual(defaultPlan(), defaultPlan()); // jedes Mal eine eigene Kopie
+  assert.notStrictEqual(defaultPlan(), defaultPlan());
 });
 
 test('Ausgangsplan: Roter Käfig 1 min, Zirkelmaschinen alle Sätze am Gerät und 30 s Wechsel', () => {
@@ -749,7 +749,8 @@ test('Ausgangsplan: Roter Käfig 1 min, Zirkelmaschinen alle Sätze am Gerät un
     t += 1000;
   }
   assert.deepEqual(by['A Roter Käfig'], ['1:45', '1:45', '1:X60', '2:45', '2:45', '2:X60', '3:45', '3:45', '3:X60', '14:45', '14:45', '14:45', '14:W60']);
-  assert.deepEqual(by['D Zirkelmaschinen'], ['5:30', '5:X30', '4w:30', '4:45', '4:X30', '6w:30', '6:30', '6:X30', '15:45', '15:X30', '20:45', '20:W60']);
+  assert.deepEqual(by['C Beine knieschonend'], ['11:45', '11:45', '11:X45', '18:45', '18:X45', '16:30', '16:30', '16:X30', '17:45', '17:W60']);
+  assert.deepEqual(by['D Zirkelmaschinen'], ['5:30', '5:X30', '6w:30', '6:30', '6:X30', '15:45', '15:X30', '20:45', '20:W60']);
   assert.deepEqual(by['B freie Gewichte'], ['7:30', '8:30', '7:30', '8:30', '7:30', '8:W60']);
 });
 

@@ -154,7 +154,7 @@ await tapAct('align'); await page.waitForTimeout(150);
 eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 80, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 80 min');
 await page.locator('[data-act="resetPlan"]').click(); await modalOk(); await page.waitForTimeout(200);
 eq(await page.evaluate(() => __app.S.plan.exercises[1].name), 'Bankdrücken liegend', 'Plan zurückgesetzt');
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 89, 'Zurückgesetzt auf Steffens Plan: 89 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 92, 'Zurückgesetzt auf Steffens Plan: 92 min');
 eq(await page.evaluate(() => __app.S.plan.exercises[2].name), 'Arm ziehen', 'Zurückgesetzt: eigene Bezeichnungen (Arm ziehen)');
 await useTestPlan(page);
 

@@ -1,4 +1,4 @@
-// Ausgangsplan = Steffens Trainingsplan (Stand 07.11.2026, vom iPhone übernommen).
+// Ausgangsplan = Steffens Trainingsplan (Stand 12.11.2026, vom iPhone übernommen).
 // Übungsnummer = feste ID (gehört zum Foto und zum Verlauf), Reihenfolge im Plan ist davon unabhängig.
 // Eigene Fotos (Übungen 15–20) liegen nur auf dem Gerät und bleiben beim Zurücksetzen erhalten.
 // Der frühere Ausgangsplan liegt als Testvorlage in tests/fixtures/ausgangsplan-bis-2026-11-07.json.
@@ -22,7 +22,7 @@ const PLAN = {
       "id": "b02",
       "name": "A Roter Käfig",
       "start": 11,
-      "end": 29,
+      "end": 36,
       "kind": "sets",
       "mode": "single",
       "items": [
@@ -33,12 +33,13 @@ const PLAN = {
       ],
       "rounds": 1,
       "roundRest": 60,
-      "switchRest": 60
+      "switchRest": 60,
+      "changeAfter": null
     },
     {
       "id": "b09",
       "name": "B freie Gewichte",
-      "start": 30,
+      "start": 37,
       "end": 43,
       "kind": "sets",
       "mode": "alternate",
@@ -53,7 +54,7 @@ const PLAN = {
       "id": "b09p",
       "name": "B Plank",
       "start": 44,
-      "end": 46,
+      "end": 49,
       "kind": "sets",
       "mode": "single",
       "items": [
@@ -63,14 +64,14 @@ const PLAN = {
     {
       "id": "b13",
       "name": "C Beine knieschonend",
-      "start": 47,
-      "end": 62,
+      "start": 50,
+      "end": 70,
       "kind": "sets",
       "mode": "single",
       "items": [
         11,
-        16,
         18,
+        16,
         17
       ],
       "rounds": 1,
@@ -79,29 +80,32 @@ const PLAN = {
     {
       "id": "b04",
       "name": "D Zirkelmaschinen",
-      "start": 63,
-      "end": 78,
+      "start": 71,
+      "end": 84,
       "kind": "sets",
       "mode": "single",
       "items": [
         5,
-        4,
         6,
         15,
         20
       ],
+      "rounds": 2,
+      "roundRest": 60,
+      "changeAfter": null,
       "switchRest": 30
     },
     {
       "id": "b12",
       "name": "Ausklang",
-      "start": 79,
-      "end": 89,
+      "start": 85,
+      "end": 92,
       "kind": "timed",
       "mode": "single",
       "items": [],
-      "minutes": 10,
-      "note": "3 Min. Cardio locker (Rad/Crosstrainer), danach Brust, Schulter, Waden, Oberschenkelvorderseite und Hüftbeuger dehnen"
+      "minutes": 7,
+      "note": "3 Min. Cardio locker (Rad/Crosstrainer), danach Brust, Schulter, Waden, Oberschenkelvorderseite und Hüftbeuger dehnen",
+      "changeAfter": null
     }
   ],
   "exercises": {
@@ -146,17 +150,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 30,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 30,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 30,
           "text": ""
         }
       ],
@@ -177,17 +181,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 20,
+          "weight": 25,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 20,
+          "weight": 25,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 20,
+          "weight": 25,
           "text": ""
         }
       ],
@@ -197,36 +201,6 @@ const PLAN = {
       "warmRest": 30,
       "step": 1.25,
       "optional": false
-    },
-    "4": {
-      "id": 4,
-      "name": "Schulterdrücken",
-      "device": "Schulterpresse",
-      "tech": "Rücken fest ans Polster; nur wenn Zeit übrig",
-      "photo": "img/04.webp",
-      "warmup": {
-        "reps": 10,
-        "weight": 20,
-        "text": ""
-      },
-      "sets": [
-        {
-          "reps": 10,
-          "weight": 30,
-          "text": ""
-        },
-        {
-          "reps": 10,
-          "weight": 30,
-          "text": ""
-        }
-      ],
-      "unit": "kg",
-      "sides": "none",
-      "rest": 45,
-      "warmRest": 30,
-      "step": 2.5,
-      "optional": true
     },
     "5": {
       "id": 5,
@@ -294,17 +268,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 5,
+          "weight": 7.5,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 5,
+          "weight": 7.5,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 5,
+          "weight": 7.5,
           "text": ""
         }
       ],
@@ -325,17 +299,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 40,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 40,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 40,
           "text": ""
         }
       ],
@@ -356,17 +330,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 15,
-          "weight": 15,
+          "weight": 35,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 15,
+          "weight": 35,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 15,
+          "weight": 35,
           "text": ""
         }
       ],
@@ -422,12 +396,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 20,
+          "weight": 35,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 20,
+          "weight": 35,
           "text": ""
         }
       ],
@@ -449,17 +423,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 15,
-          "weight": 30,
+          "weight": 37,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 30,
+          "weight": 37,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 30,
+          "weight": 37,
           "text": ""
         }
       ],
@@ -480,12 +454,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 12,
-          "weight": 30,
+          "weight": 35,
           "text": ""
         },
         {
           "reps": 12,
-          "weight": 30,
+          "weight": 35,
           "text": ""
         }
       ],
@@ -506,12 +480,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 15,
-          "weight": 30,
+          "weight": 40,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 30,
+          "weight": 40,
           "text": ""
         }
       ],
@@ -557,12 +531,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 15,
-          "weight": 30,
+          "weight": 45,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 30,
+          "weight": 45,
           "text": ""
         }
       ],
