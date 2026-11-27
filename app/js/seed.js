@@ -1,6 +1,6 @@
-// Ausgangsplan = Steffens Trainingsplan (Stand 12.11.2026, vom iPhone übernommen).
+// Ausgangsplan = Steffens Trainingsplan (Stand 27.11.2026, vom iPhone übernommen).
 // Übungsnummer = feste ID (gehört zum Foto und zum Verlauf), Reihenfolge im Plan ist davon unabhängig.
-// Eigene Fotos (Übungen 15–20) liegen nur auf dem Gerät und bleiben beim Zurücksetzen erhalten.
+// Eigene Fotos (z. B. Übungen 11, 15–20) liegen nur auf dem Gerät und bleiben beim Zurücksetzen erhalten.
 // Der frühere Ausgangsplan liegt als Testvorlage in tests/fixtures/ausgangsplan-bis-2026-11-07.json.
 export const PLAN_VERSION = 1;
 
@@ -22,7 +22,7 @@ const PLAN = {
       "id": "b02",
       "name": "A Roter Käfig",
       "start": 11,
-      "end": 36,
+      "end": 34,
       "kind": "sets",
       "mode": "single",
       "items": [
@@ -39,72 +39,72 @@ const PLAN = {
     {
       "id": "b09",
       "name": "B freie Gewichte",
-      "start": 37,
+      "start": 35,
       "end": 43,
       "kind": "sets",
       "mode": "alternate",
       "items": [
-        7,
+        21,
         8
       ],
       "rounds": 1,
       "roundRest": null
     },
     {
-      "id": "b09p",
-      "name": "B Plank",
+      "id": "b09d1",
+      "name": "B Dehnen 1/2",
       "start": 44,
       "end": 49,
-      "kind": "sets",
+      "kind": "timed",
       "mode": "single",
-      "items": [
-        19
-      ]
+      "items": [],
+      "minutes": 5,
+      "note": "Dehnungsübungen, 5 min",
+      "changeAfter": 0
+    },
+    {
+      "id": "b09d2",
+      "name": "B Dehnen 2/2",
+      "start": 49,
+      "end": 54,
+      "kind": "timed",
+      "mode": "single",
+      "items": [],
+      "minutes": 5,
+      "note": "Dehnungsübungen, 5 min"
     },
     {
       "id": "b13",
-      "name": "C Beine knieschonend",
-      "start": 50,
-      "end": 70,
+      "name": "C Beine & Maschinen",
+      "start": 55,
+      "end": 85,
       "kind": "sets",
       "mode": "single",
       "items": [
         11,
         18,
         16,
-        17
-      ],
-      "rounds": 1,
-      "roundRest": 60
-    },
-    {
-      "id": "b04",
-      "name": "D Zirkelmaschinen",
-      "start": 71,
-      "end": 84,
-      "kind": "sets",
-      "mode": "single",
-      "items": [
         5,
         6,
         15,
+        17,
         20
       ],
-      "rounds": 2,
+      "rounds": 1,
       "roundRest": 60,
-      "changeAfter": null,
+      "changeAfter": 30,
       "switchRest": 30
     },
     {
       "id": "b12",
       "name": "Ausklang",
-      "start": 85,
-      "end": 92,
+      "start": 86,
+      "end": 93,
       "kind": "timed",
       "mode": "single",
       "items": [],
       "minutes": 7,
-      "note": "3 Min. Cardio locker (Rad/Crosstrainer), danach Brust, Schulter, Waden, Oberschenkelvorderseite und Hüftbeuger dehnen",
+      "note": "6Min. Cardio locker",
       "changeAfter": null
     }
   ],
@@ -119,17 +119,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 10,
+          "weight": 11.25,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 10,
+          "weight": 11.25,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 10,
+          "weight": 11.25,
           "text": ""
         }
       ],
@@ -150,17 +150,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 30,
+          "weight": 32.5,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 30,
+          "weight": 32.5,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 30,
+          "weight": 32.5,
           "text": ""
         }
       ],
@@ -181,17 +181,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 31.25,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 31.25,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 25,
+          "weight": 31.25,
           "text": ""
         }
       ],
@@ -212,42 +212,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 40,
+          "weight": 42.5,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 40,
-          "text": ""
-        }
-      ],
-      "unit": "kg",
-      "sides": "none",
-      "rest": 30,
-      "warmRest": 30,
-      "step": 2.5,
-      "optional": true
-    },
-    "6": {
-      "id": 6,
-      "name": "Reverse Butterfly",
-      "device": "Reverse-Butterfly-Maschine",
-      "tech": "Arme weit nach hinten, Schultern tief",
-      "photo": "img/06.webp",
-      "warmup": {
-        "reps": 10,
-        "weight": 20,
-        "text": ""
-      },
-      "sets": [
-        {
-          "reps": 10,
-          "weight": 30,
-          "text": ""
-        },
-        {
-          "reps": 10,
-          "weight": 30,
+          "weight": 42.5,
           "text": ""
         }
       ],
@@ -258,35 +228,30 @@ const PLAN = {
       "step": 2.5,
       "optional": false
     },
-    "7": {
-      "id": 7,
-      "name": "SZ-Stange",
-      "device": "mit oder ohne Scott-Bank mit SZ-Stange",
-      "tech": "Oberarme ganz aufs Polster, langsam ablassen",
-      "photo": "img/07.webp",
+    "6": {
+      "id": 6,
+      "name": "Reverse Butterfly",
+      "device": "Reverse-Butterfly-Maschine",
+      "tech": "Arme weit nach hinten, Schultern tief",
+      "photo": "img/06.webp",
       "warmup": null,
       "sets": [
         {
           "reps": 10,
-          "weight": 7.5,
+          "weight": 42.5,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 7.5,
-          "text": ""
-        },
-        {
-          "reps": 10,
-          "weight": 7.5,
+          "weight": 42.5,
           "text": ""
         }
       ],
-      "unit": "kg je Seite",
+      "unit": "kg",
       "sides": "none",
       "rest": 30,
       "warmRest": 30,
-      "step": 1.25,
+      "step": 2.5,
       "optional": false
     },
     "8": {
@@ -299,17 +264,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 40,
+          "weight": 45,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 40,
+          "weight": 45,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 40,
+          "weight": 45,
           "text": ""
         }
       ],
@@ -322,31 +287,26 @@ const PLAN = {
     },
     "11": {
       "id": 11,
-      "name": "Waden sitzend oder stehend",
-      "device": "Wadenmaschine sitzend",
+      "name": "Waden stehend",
+      "device": "Wadenmaschine",
       "tech": "Ganz runter, ganz hoch, oben kurz halten;",
       "photo": "img/11.webp",
       "warmup": null,
       "sets": [
         {
           "reps": 15,
-          "weight": 35,
+          "weight": 40,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 35,
-          "text": ""
-        },
-        {
-          "reps": 15,
-          "weight": 35,
+          "weight": 40,
           "text": ""
         }
       ],
       "unit": "kg",
       "sides": "none",
-      "rest": 45,
+      "rest": 30,
       "warmRest": 30,
       "step": 2.5,
       "optional": false
@@ -361,22 +321,22 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 10,
+          "weight": 12.5,
           "text": "gerade"
         },
         {
           "reps": 10,
-          "weight": 10,
+          "weight": 12.5,
           "text": "links"
         },
         {
           "reps": 10,
-          "weight": 10,
+          "weight": 12.5,
           "text": "rechts"
         },
         {
           "reps": 10,
-          "weight": 10,
+          "weight": 12.5,
           "text": "gerade"
         }
       ],
@@ -396,12 +356,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 10,
-          "weight": 35,
+          "weight": 42.5,
           "text": ""
         },
         {
           "reps": 10,
-          "weight": 35,
+          "weight": 42.5,
           "text": ""
         }
       ],
@@ -423,17 +383,17 @@ const PLAN = {
       "sets": [
         {
           "reps": 15,
-          "weight": 37,
+          "weight": 50,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 37,
+          "weight": 50,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 37,
+          "weight": 50,
           "text": ""
         }
       ],
@@ -453,12 +413,12 @@ const PLAN = {
       "warmup": null,
       "sets": [
         {
-          "reps": 12,
+          "reps": 15,
           "weight": 35,
           "text": ""
         },
         {
-          "reps": 12,
+          "reps": 15,
           "weight": 35,
           "text": ""
         }
@@ -480,12 +440,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 15,
-          "weight": 40,
+          "weight": 47.5,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 40,
+          "weight": 47.5,
           "text": ""
         }
       ],
@@ -494,32 +454,6 @@ const PLAN = {
       "rest": 45,
       "warmRest": 30,
       "step": 2.5,
-      "optional": false
-    },
-    "19": {
-      "id": 19,
-      "name": "Unterarmstütz (Plank)",
-      "device": "Matte",
-      "tech": "Körper gerade Linie, Bauch und Gesäß fest, ruhig weiteratmen; Füße auf Platte, Kopf nach oben durchstrecken- 5 s halten",
-      "photo": null,
-      "warmup": null,
-      "sets": [
-        {
-          "reps": 10,
-          "weight": null,
-          "text": "Sek."
-        },
-        {
-          "reps": 10,
-          "weight": null,
-          "text": "Sek."
-        }
-      ],
-      "unit": "",
-      "sides": "none",
-      "rest": 30,
-      "warmRest": 30,
-      "step": null,
       "optional": false
     },
     "20": {
@@ -531,12 +465,12 @@ const PLAN = {
       "sets": [
         {
           "reps": 15,
-          "weight": 45,
+          "weight": 50,
           "text": ""
         },
         {
           "reps": 15,
-          "weight": 45,
+          "weight": 50,
           "text": ""
         }
       ],
@@ -547,6 +481,37 @@ const PLAN = {
       "step": null,
       "optional": false,
       "id": 20
+    },
+    "21": {
+      "id": 21,
+      "name": "SZ-Stange frei stehend",
+      "device": "SZ-Stange, frei stehend",
+      "tech": "Aufrecht stehen, Oberarme am Körper, ohne Schwung, langsam ablassen",
+      "photo": "img/07.webp",
+      "warmup": null,
+      "sets": [
+        {
+          "reps": 10,
+          "weight": 5,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 5,
+          "text": ""
+        },
+        {
+          "reps": 10,
+          "weight": 5,
+          "text": ""
+        }
+      ],
+      "unit": "kg je Seite",
+      "sides": "none",
+      "rest": 30,
+      "warmRest": 30,
+      "step": 1.25,
+      "optional": false
     }
   },
   "blockChange": 60

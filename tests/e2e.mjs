@@ -49,7 +49,7 @@ await page.evaluate(() => navigator.serviceWorker.ready);
 await page.waitForFunction(async () => (await caches.keys()).length > 0 && (await (await caches.open((await caches.keys())[0])).keys()).length > 20);
 ok(true, 'Service Worker aktiv, Dateien zwischengespeichert');
 await hscroll('Start'); await shot('01-start');
-eq(await page.evaluate(() => __app.S.plan.blocks.map((b) => b.name).join(' | ')), 'Cardio Aufwärmen | A Roter Käfig | B freie Gewichte | B Plank | C Beine knieschonend | D Zirkelmaschinen | Ausklang', 'Ausgangsplan = Steffens Plan');
+eq(await page.evaluate(() => __app.S.plan.blocks.map((b) => b.name).join(' | ')), 'Cardio Aufwärmen | A Roter Käfig | B freie Gewichte | B Dehnen 1/2 | B Dehnen 2/2 | C Beine & Maschinen | Ausklang', 'Ausgangsplan = Steffens Plan');
 await useTestPlan(page);
 
 console.log('2. Training komplett durchklicken');
@@ -154,7 +154,7 @@ await tapAct('align'); await page.waitForTimeout(150);
 eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 80, 'Zeiten lückenlos (inkl. 1 min Wechselzeiten) → 80 min');
 await page.locator('[data-act="resetPlan"]').click(); await modalOk(); await page.waitForTimeout(200);
 eq(await page.evaluate(() => __app.S.plan.exercises[1].name), 'Bankdrücken liegend', 'Plan zurückgesetzt');
-eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 92, 'Zurückgesetzt auf Steffens Plan: 92 min');
+eq(await page.evaluate(() => __app.L.planTotalMinutes(__app.S.plan)), 93, 'Zurückgesetzt auf Steffens Plan: 93 min');
 eq(await page.evaluate(() => __app.S.plan.exercises[2].name), 'Arm ziehen', 'Zurückgesetzt: eigene Bezeichnungen (Arm ziehen)');
 await useTestPlan(page);
 
