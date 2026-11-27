@@ -1,6 +1,6 @@
 // Service Worker: alles beim ersten Laden zwischenspeichern, danach offline.
 // Bei jeder Änderung an App-Dateien die Versionsnummer erhöhen.
-const CACHE = 'training-v13';
+const CACHE = 'training-v14';
 const ASSETS = [
   './',
   'index.html',
@@ -15,7 +15,7 @@ const ASSETS = [
   'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png',
   'img/01.webp', 'img/02.webp', 'img/03.webp', 'img/04.webp', 'img/05.webp', 'img/06.webp', 'img/07.webp',
-  'img/08.webp', 'img/09.webp', 'img/10.webp', 'img/11.webp', 'img/13.webp', 'img/14.webp',
+  'img/08.webp', 'img/11.webp', 'img/13.webp', 'img/14.webp',
 ];
 
 self.addEventListener('install', (e) => {

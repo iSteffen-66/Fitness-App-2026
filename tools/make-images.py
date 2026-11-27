@@ -7,8 +7,11 @@ from PIL import Image, ImageOps
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 out = os.path.join(root, 'app', 'img')
 os.makedirs(out, exist_ok=True)
+SKIP = {'09', '10'}  # Übungen 9 und 10 nicht mehr im Plan; Foto 09 zeigt eine Person
 for f in sorted(glob.glob(os.path.join(root, 'fotos', '[0-9][0-9]-*.jp*g'))):
     nr = re.match(r'(\d\d)-', os.path.basename(f)).group(1)
+    if nr in SKIP:
+        continue
     im = ImageOps.exif_transpose(Image.open(f)).convert('RGB')
     if im.width > 1200:
         im = im.resize((1200, round(im.height * 1200 / im.width)), Image.LANCZOS)
