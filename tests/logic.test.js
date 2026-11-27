@@ -719,38 +719,40 @@ test('Plan-Datei ohne Fotos: vorhandene eigene Fotos bleiben erhalten', async ()
   assert.deepEqual(L.mergePlanPhotos(cur, p, {}), {});
 });
 
-// ---------- Ausgangsplan = Steffens Plan (Stand 07.11.2026) ----------
-test('Ausgangsplan entspricht Steffens Plan vom 07.11.', () => {
+// ---------- Ausgangsplan = Steffens Plan (Stand 27.11.2026) ----------
+test('Ausgangsplan entspricht Steffens Plan vom 27.11.', () => {
   const p = defaultPlan();
-  assert.deepEqual(p.blocks.map((b) => `${b.name}:${b.mode}:${(b.items || []).join('-')}`), [
-    'Cardio Aufwärmen:single:', 'A Roter Käfig:single:1-2-3-14', 'B freie Gewichte:alternate:7-8', 'B Plank:single:19',
-    'C Beine knieschonend:single:11-16-18-17', 'D Zirkelmaschinen:single:5-4-6-15-20', 'Ausklang:single:']);
-  assert.deepEqual(Object.keys(p.exercises).map(Number), [1, 2, 3, 4, 5, 6, 7, 8, 11, 14, 15, 16, 17, 18, 19, 20]);
-  assert.equal(p.exercises[2].name, 'Arm ziehen');
-  assert.equal(p.exercises[15].name, 'Rückenstrecker');
-  assert.equal(p.exercises[19].name, 'Unterarmstütz (Plank)');
-  // eigene Fotos nicht im Ausgangsplan (bleiben auf dem Gerät), Standardbilder schon
-  assert.ok([15, 16, 17, 18, 19, 20].every((id) => p.exercises[id].photo === null));
-  assert.equal(p.exercises[1].photo, 'img/01.webp');
-  assert.equal(L.planTotalMinutes(p), 89);
+  assert.deepEqual(p.blocks.map((b) => `${b.name}:${b.kind}:${b.mode}:${(b.items || []).join('-')}`), [
+    'Cardio Aufwärmen:timed:single:', 'A Roter Käfig:sets:single:1-2-3-14', 'B freie Gewichte:sets:alternate:21-8',
+    'B Dehnen 1/2:timed:single:', 'B Dehnen 2/2:timed:single:', 'C Beine & Maschinen:sets:single:11-18-16-5-6-15-17-20', 'Ausklang:timed:single:']);
+  assert.deepEqual(Object.keys(p.exercises).map(Number), [1, 2, 3, 5, 6, 8, 11, 14, 15, 16, 17, 18, 20, 21]);
+  assert.ok(!p.exercises[4] && !p.exercises[7] && !p.exercises[19], 'Schulterdrücken, SZ-Scott und Plank nicht mehr im Plan');
+  assert.equal(p.exercises[21].name, 'SZ-Stange frei stehend');
+  assert.deepEqual(p.exercises[21].sets.map((s) => [s.reps, s.weight]), [[10, 5], [10, 5], [10, 5]]);
+  assert.deepEqual([1, 2, 3, 5, 6, 8, 11, 14, 15, 16, 17, 18, 20].map((i) => p.exercises[i].sets[0].weight),
+    [11.25, 32.5, 31.25, 42.5, 42.5, 45, 40, 12.5, 42.5, 50, 35, 47.5, 50]);
+  assert.ok([15, 16, 17, 18, 20].every((id) => p.exercises[id].photo === null));
+  assert.equal(L.planTotalMinutes(p), 93);
   assert.equal(L.validateImport(L.buildExport(p, [], {})).ok, true);
-  assert.notStrictEqual(defaultPlan(), defaultPlan()); // jedes Mal eine eigene Kopie
+  assert.notStrictEqual(defaultPlan(), defaultPlan());
 });
 
-test('Ausgangsplan: Roter Käfig 1 min, Zirkelmaschinen alle Sätze am Gerät und 30 s Wechsel', () => {
+test('Ausgangsplan: Abläufe (Roter Käfig 1 min, Dehnen 2 × 5 min ohne Wechsel, C mit 30 s Gerätewechsel)', () => {
   const p = defaultPlan();
   const a = L.newActive(p, T0);
   const by = {}; let t = T0;
   while (L.currentStep(a)) {
     const s = L.currentStep(a);
-    L.completeStep(a, s.type === 'timed' ? { actualSec: 60 } : { reps: s.reps, weight: s.weight ?? 0 }, t);
-    const lbl = s.type === 'timed' ? 'T' : `${s.exId}${s.setType === 'warmup' ? 'w' : ''}`;
+    L.completeStep(a, s.type === 'timed' ? { actualSec: s.seconds } : { reps: s.reps, weight: s.weight ?? 0 }, t);
+    const lbl = s.type === 'timed' ? `T${s.seconds}` : `${s.exId}`;
     (by[s.blockName] ||= []).push(`${lbl}:${a.rest ? (a.rest.change ? 'W' : a.rest.toEx ? 'X' : '') + a.rest.total : 0}`);
     t += 1000;
   }
   assert.deepEqual(by['A Roter Käfig'], ['1:45', '1:45', '1:X60', '2:45', '2:45', '2:X60', '3:45', '3:45', '3:X60', '14:45', '14:45', '14:45', '14:W60']);
-  assert.deepEqual(by['D Zirkelmaschinen'], ['5:30', '5:X30', '4w:30', '4:45', '4:X30', '6w:30', '6:30', '6:X30', '15:45', '15:X30', '20:45', '20:W60']);
-  assert.deepEqual(by['B freie Gewichte'], ['7:30', '8:30', '7:30', '8:30', '7:30', '8:W60']);
+  assert.deepEqual(by['B freie Gewichte'], ['21:30', '8:30', '21:30', '8:30', '21:30', '8:W60']);
+  assert.deepEqual(by['B Dehnen 1/2'], ['T300:0']);
+  assert.deepEqual(by['B Dehnen 2/2'], ['T300:W60']);
+  assert.deepEqual(by['C Beine & Maschinen'], ['11:30', '11:X30', '18:45', '18:X30', '16:30', '16:30', '16:X30', '5:30', '5:X30', '6:30', '6:X30', '15:45', '15:X30', '17:45', '17:X30', '20:45', '20:W30']);
 });
 
 test('Plan zurücksetzen lässt eigene Fotos und Verlauf unverändert', async () => {

@@ -76,17 +76,16 @@ Zwischen zwei Blöcken läuft automatisch eine **Wechselzeit von 1 Minute** (Anz
 - Die Zeitfenster der Blöcke enthalten die Wechselzeiten. Nach Änderungen „Zeiten lückenlos“ tippen.
 - Pläne ohne eigene Angabe (z. B. ältere Sicherungen) nutzen ebenfalls 1 Minute.
 
-Ausgangsplan = dein Trainingsplan (Stand 07.11.2026, Gesamtdauer mit Wechselzeiten 89 Minuten):
+Ausgangsplan = dein Trainingsplan (Stand 27.11.2026, Gesamtdauer mit Wechselzeiten 93 Minuten):
 
 | Block | Übungen | Ablauf |
 |---|---|---|
 | Cardio Aufwärmen | – | 10 min |
-| A Roter Käfig | 1 Bankdrücken, 2 Arm ziehen, 3 Enges Rudern, 14 Bauch schräg | nacheinander, 1 min Wechsel zwischen den Geräten |
-| B freie Gewichte | 7 SZ-Stange, 8 Trizepsdrücken am Seil | abwechselnd, 3 Runden |
-| B Plank | 19 Unterarmstütz | 2 Sätze |
-| C Beine knieschonend | 11 Waden, 16 Beinpresse, 18 Abduktoren, 17 Beinbeuger | nacheinander |
-| D Zirkelmaschinen | 5 Butterfly, 4 Schulterdrücken, 6 Reverse Butterfly, 15 Rückenstrecker, 20 Bauchmuskel | nacheinander (alle Sätze am Gerät), 30 s Wechsel |
-| Ausklang | – | 10 min |
+| A Roter Käfig | 1 Bankdrücken, 2 Arm ziehen, 3 Enges Rudern, 14 Bauch schräg | nacheinander, 1 min Gerätewechsel, 23 min |
+| B freie Gewichte | 21 SZ-Stange frei stehend, 8 Trizepsdrücken am Seil | abwechselnd, 3 Runden, 8 min |
+| B Dehnen 1/2, 2/2 | – | 2 × 5 min, direkt hintereinander |
+| C Beine & Maschinen | 11 Waden, 18 Abduktoren, 16 Beinpresse, 5 Butterfly, 6 Reverse Butterfly, 15 Rückenstrecker, 17 Beinbeuger, 20 Bauchmuskel | nacheinander, 30 s Gerätewechsel, 30 min |
+| Ausklang | – | 7 min |
 
 „Plan auf Ausgangsversion zurücksetzen“ stellt genau diesen Plan wieder her. Eigene Fotos und Verlauf bleiben dabei erhalten. Der frühere Ausgangsplan dient nur noch den automatischen Tests (`tests/fixtures/ausgangsplan-bis-2026-11-07.json`).
 
